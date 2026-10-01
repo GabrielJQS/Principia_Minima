@@ -63,7 +63,7 @@ BARRA_PADRAO_DEFAULT = 3500.0
 KERF_DEFAULT = 5
 LIMITE_RETALHO_DEFAULT = 700.0
 DESPERDICIO_MAX_RECOMENDADO_DEFAULT = 250.0
-TEMPO_LIMITE_OTIMIZACAO_MS = 240000  # 60 segundos por diametro
+TEMPO_LIMITE_OTIMIZACAO_MS = 240000  # 240 segundos (4 minutos) por diametro
 
 
 # =====================================================================
@@ -448,7 +448,7 @@ def tempo_restante_otimizacao_ms(inicio_otimizacao):
     Retorna o tempo restante do orçamento total de otimização.
 
     O limite é compartilhado entre a Etapa 1 e a Etapa 2.
-    Assim, cada diâmetro recebe no máximo 60 segundos de busca do solver.
+    Assim, cada diâmetro recebe no máximo 240 segundos de busca do solver.
     """
     decorrido_ms = int((time.monotonic() - inicio_otimizacao) * 1000)
     return max(0, TEMPO_LIMITE_OTIMIZACAO_MS - decorrido_ms)
@@ -513,7 +513,7 @@ def otimizar_planejado_por_diametro(
     ]
 
     # ---------------------------------------------------------
-    # ORCAMENTO TOTAL DE OTIMIZACAO: 60 segundos por diametro
+    # ORCAMENTO TOTAL DE OTIMIZACAO: 240 segundos por diametro
     # ---------------------------------------------------------
     inicio_otimizacao = time.monotonic()
 
@@ -545,7 +545,7 @@ def otimizar_planejado_por_diametro(
     if status1 not in (pywraplp.Solver.OPTIMAL, pywraplp.Solver.FEASIBLE):
         raise RuntimeError(
             f"Diametro {diametro}: nenhuma solucao viavel foi encontrada "
-            "dentro do limite de 60 segundos."
+            "dentro do limite de 240 segundos."
         )
 
     minimo_barras = int(round(solver1.Objective().Value()))
@@ -612,7 +612,7 @@ def otimizar_planejado_por_diametro(
         if tempo_restante <= 0:
             valores = valores_etapa1
             status_texto = (
-                "Otimo em numero de barras; limite total de 60 segundos "
+                "Otimo em numero de barras; limite total de 240 segundos "
                 "atingido antes da Etapa 2"
             )
         else:
@@ -626,7 +626,7 @@ def otimizar_planejado_por_diametro(
                 valores = valores_etapa1
                 status_texto = (
                     "Otimo em numero de barras; melhor solucao da Etapa 1 "
-                    "mantida ao atingir o limite de 60 segundos"
+                    "mantida ao atingir o limite de 240 segundos"
                 )
             else:
                 valores = [
@@ -5920,7 +5920,7 @@ class ProgressoSolverDialog(tk.Toplevel):
     """Janela de progresso com percentual e ETA estimado.
 
     O ETA é uma estimativa operacional: usa o orçamento máximo de solver
-    (60 s por diâmetro) e é recalculado conforme as etapas terminam.
+    (240 s por diâmetro) e é recalculado conforme as etapas terminam.
     """
 
     def __init__(self, parent, titulo, colors):
@@ -6997,7 +6997,7 @@ def ler_historico_execucoes_feedback(limite=300):
 
 
 class PrincipiaMinimaFactoryApp(PrincipiaMinimaModernApp):
-    """Interface V3.2: moderna, escura e orientada à operação da fábrica."""
+    """Interface V3: orientada à operação da fábrica."""
 
     COLORS = {
         'navy': '#07131F',
@@ -7154,9 +7154,8 @@ class PrincipiaMinimaFactoryApp(PrincipiaMinimaModernApp):
             return b
 
         nav_button('▸ Planejamento inteligente', self.mostrar_planejado, True)
-        nav_button('▸ Modo emergencial', self.mostrar_emergencial)
+        nav_button('▸ Modo sob demanda', self.mostrar_emergencial)
         nav_button('▸ Histórico de execuções', self.mostrar_historico)
-        nav_button('▸ Selecionar logo MR', self.selecionar_logo_mr)
 
         tk.Frame(sidebar, bg=self.COLORS['border'], height=1).pack(fill='x', padx=16, pady=18)
         tk.Label(sidebar, text='BANCO LOCAL', bg=self.COLORS['surface'], fg=self.COLORS['muted'], font=('Segoe UI', 8, 'bold')).pack(anchor='w', padx=18)
@@ -7171,7 +7170,7 @@ class PrincipiaMinimaFactoryApp(PrincipiaMinimaModernApp):
         ttk.Label(hero, text='Escolha a estratégia de produção', style='CardValue.TLabel').pack(anchor='w', pady=(5, 3))
         ttk.Label(
             hero,
-            text='O Principia Minima gera o plano; o operador confirma se ele foi realmente executado. Somente os modelos confirmados entram na base de aprendizagem operacional.',
+            text='O Principia Minima gera o plano -> O operador confirma se ele foi realmente executado.',
             style='White.TLabel',
             wraplength=920,
             justify='left',
@@ -7192,9 +7191,9 @@ class PrincipiaMinimaFactoryApp(PrincipiaMinimaModernApp):
                 self.COLORS['cyan'],
             ),
             (
-                'MODO EMERGENCIAL',
+                'MODO SOB DEMANDA',
                 'Usa bons padrões dos retalhos existentes primeiro. Quando necessário, libera barras novas do estoque para encontrar uma solução melhor.',
-                'ABRIR EMERGENCIAL',
+                'ABRIR SOB DEMANDA',
                 self.mostrar_emergencial,
                 self.COLORS['green'],
             ),
@@ -7416,9 +7415,3264 @@ class PrincipiaMinimaFactoryApp(PrincipiaMinimaModernApp):
         self._build_summary_table(detail, resumo)
 
 
+
 # =====================================================================
-# EXECUÇÃO V3.2
+# PRINCIPIA MINIMA V3 - INTEGRAÇÃO PLANEJADO/EMERGENCIAL + LAB
 # =====================================================================
-if __name__ == '__main__':
-    app = PrincipiaMinimaFactoryApp()
+# Melhorias principais:
+# - Planejamento Inteligente aceita estoque atual opcional por arquivo.
+# - Modo Emergencial possui aba própria do Principia Lab e integra V(r,phi)
+#   dentro da decisão matemática, em vez de apenas anotar o resultado depois.
+# - Modo Emergencial inclui barras padrão complementares no próprio modelo,
+#   evitando deixar demanda faltante quando uma barra nova pode atender.
+# - Exportação Excel reduzida a PLANO_DE_CORTE e METODO.
+# - Folha visual paginada, colorida por SVG e numerada Folha X / Y.
+# =====================================================================
+
+VERSAO_INDUSTRIAL = "3.3 Factory Intelligence"
+BARRAS_POR_FOLHA_IMPRESSAO = 6
+ESCALA_V33 = 1000
+
+
+def _valor_retalho_v33(modelo_valor, diametro, comprimento, tamanho_fonte=None):
+    """Valor futuro de um retalho; usa Lab quando disponível e fallback quadrático."""
+    comprimento = float(comprimento or 0)
+    if comprimento <= 0:
+        return 0.0
+    if modelo_valor is not None and getattr(modelo_valor, "disponivel", False):
+        return float(modelo_valor.valor(diametro, comprimento))
+    ref = float(tamanho_fonte or comprimento or 1.0)
+    return float(score_fallback_quadratico(comprimento, ref))
+
+
+def _classes_estoque_complemento_v33(df_estoque_diametro, barra_padrao, demandas):
+    classes = []
+    if isinstance(df_estoque_diametro, pd.DataFrame) and not df_estoque_diametro.empty:
+        for _, row in df_estoque_diametro.iterrows():
+            qtd = int(row.get("QUANTIDADE", 0) or 0)
+            if qtd <= 0:
+                continue
+            classes.append(
+                {
+                    "tipo": str(row.get("TIPO", "RETALHO")),
+                    "comprimento": float(row.get("COMPRIMENTO", 0) or 0),
+                    "quantidade": qtd,
+                    "origem": "ESTOQUE_ATUAL",
+                    "virtual": False,
+                }
+            )
+
+    # Quantidade segura: no pior caso, uma barra por peça demandada.
+    max_complementares = max(1, int(sum(int(x) for x in demandas)))
+    classes.append(
+        {
+            "tipo": "NOVA",
+            "comprimento": float(barra_padrao),
+            "quantidade": max_complementares,
+            "origem": "BARRA_NOVA_COMPLEMENTAR",
+            "virtual": True,
+        }
+    )
+    return classes
+
+
+def _montar_registros_padroes_v33(
+    classes,
+    comprimentos,
+    demandas,
+    kerf,
+    limite_retalho,
+    modelo_valor,
+    diametro,
+):
+    registros = []
+    for s, classe in enumerate(classes):
+        tamanho = float(classe["comprimento"])
+        padroes = gerar_padroes_completos(comprimentos, demandas, tamanho, kerf)
+        valor_origem = 0.0
+        if classe["tipo"] == "RETALHO":
+            valor_origem = _valor_retalho_v33(modelo_valor, diametro, tamanho, tamanho)
+
+        for p in padroes:
+            sobra = calcular_sobra(p, comprimentos, tamanho, kerf)
+            desperdicio = sobra if sobra < limite_retalho else 0.0
+            reaproveitavel = 1 if sobra >= limite_retalho else 0
+            valor_sobra = (
+                _valor_retalho_v33(modelo_valor, diametro, sobra, tamanho)
+                if reaproveitavel
+                else 0.0
+            )
+            # Para retalho já existente, o valor relevante é a variação do estoque:
+            # retalho não usado permanece no estoque (constante); usar o retalho troca
+            # V(origem) por V(sobra). Para barra nova, considera-se V(sobra).
+            delta_valor = valor_sobra - valor_origem if classe["tipo"] == "RETALHO" else valor_sobra
+            registros.append(
+                {
+                    "classe": s,
+                    "padrao": tuple(p),
+                    "sobra": float(sobra),
+                    "desperdicio": float(desperdicio),
+                    "reaproveitavel": int(reaproveitavel),
+                    "valor_sobra": float(valor_sobra),
+                    "valor_origem": float(valor_origem),
+                    "delta_valor": float(delta_valor),
+                    "eh_nova": 1 if classe["tipo"] == "NOVA" else 0,
+                    "eh_virtual": 1 if classe.get("virtual") else 0,
+                }
+            )
+    return registros
+
+
+def _criar_modelo_v33(classes, registros, demandas, fixos=None):
+    fixos = fixos or {}
+    solver = criar_solver()
+    x = [
+        solver.IntVar(0, classes[r["classe"]]["quantidade"], f"x33_{idx}")
+        for idx, r in enumerate(registros)
+    ]
+
+    # Limite por classe física de estoque.
+    for s, classe in enumerate(classes):
+        idxs = [j for j, r in enumerate(registros) if r["classe"] == s]
+        if idxs:
+            solver.Add(solver.Sum(x[j] for j in idxs) <= int(classe["quantidade"]))
+
+    # Atendimento exato da demanda: sem sobreprodução e sem faltas.
+    n_itens = len(demandas)
+    for i in range(n_itens):
+        solver.Add(
+            solver.Sum(registros[j]["padrao"][i] * x[j] for j in range(len(registros)))
+            == int(demandas[i])
+        )
+
+    metricas = {
+        "fontes": solver.Sum(x[j] for j in range(len(registros))),
+        "desperdicio": solver.Sum(
+            int(round(registros[j]["desperdicio"] * ESCALA_V33)) * x[j]
+            for j in range(len(registros))
+        ),
+        "novas": solver.Sum(registros[j]["eh_nova"] * x[j] for j in range(len(registros))),
+        "complementares": solver.Sum(registros[j]["eh_virtual"] * x[j] for j in range(len(registros))),
+        "fragmentacao": solver.Sum(registros[j]["reaproveitavel"] * x[j] for j in range(len(registros))),
+        "valor_futuro": solver.Sum(
+            int(round(registros[j]["delta_valor"] * ESCALA_V33)) * x[j]
+            for j in range(len(registros))
+        ),
+    }
+
+    for nome, valor in fixos.items():
+        solver.Add(metricas[nome] == int(valor))
+
+    return solver, x, metricas
+
+
+def _resolver_lexicografico_v33(classes, registros, demandas, sequencia, inicio):
+    """
+    Resolve etapas sequenciais. Só passa à etapa seguinte quando o ótimo da etapa
+    atual foi comprovado, preservando a lógica lexicográfica.
+    """
+    if not registros:
+        raise RuntimeError("Nenhum padrão viável foi gerado para este diâmetro.")
+
+    total_ms = int(TEMPO_LIMITE_OTIMIZACAO_MS)
+    # Orçamento por etapa; a última recebe todo o restante.
+    fracoes = [0.38, 0.24, 0.14, 0.10, 0.14]
+    fixos = {}
+    valores_melhores = None
+    status_partes = []
+    hint = None
+
+    for idx, (metrica, sentido, rotulo) in enumerate(sequencia):
+        restante = tempo_restante_otimizacao_ms(inicio)
+        if restante <= 0:
+            status_partes.append("tempo esgotado antes de " + rotulo)
+            break
+
+        solver, x, metricas = _criar_modelo_v33(classes, registros, demandas, fixos)
+        if sentido == "min":
+            solver.Minimize(metricas[metrica])
+        else:
+            solver.Maximize(metricas[metrica])
+
+        if hint is not None:
+            try:
+                solver.SetHint(x, hint)
+            except Exception:
+                pass
+
+        if idx < len(sequencia) - 1:
+            teto = max(5000, int(total_ms * fracoes[min(idx, len(fracoes) - 1)]))
+            solver.SetTimeLimit(max(1, min(restante, teto)))
+        else:
+            solver.SetTimeLimit(max(1, restante))
+
+        status = solver.Solve()
+        if status not in (pywraplp.Solver.OPTIMAL, pywraplp.Solver.FEASIBLE):
+            if valores_melhores is None:
+                raise RuntimeError(f"Nenhuma solução viável encontrada na etapa: {rotulo}.")
+            status_partes.append(f"{rotulo}: sem nova solução; anterior preservada")
+            break
+
+        valores = [int(round(v.solution_value())) for v in x]
+        valores_melhores = valores
+        hint = [float(v) for v in valores]
+        valor_obj = sum(
+            (
+                1 if metrica == "fontes" else
+                registros[j]["eh_nova"] if metrica == "novas" else
+                registros[j]["eh_virtual"] if metrica == "complementares" else
+                registros[j]["reaproveitavel"] if metrica == "fragmentacao" else
+                int(round(registros[j]["desperdicio"] * ESCALA_V33)) if metrica == "desperdicio" else
+                int(round(registros[j]["delta_valor"] * ESCALA_V33))
+            ) * valores[j]
+            for j in range(len(registros))
+        )
+
+        if status == pywraplp.Solver.OPTIMAL:
+            fixos[metrica] = int(valor_obj)
+            status_partes.append(f"{rotulo}: ótimo comprovado")
+        else:
+            status_partes.append(f"{rotulo}: melhor viável; ótimo não comprovado")
+            break
+
+    return valores_melhores, " | ".join(status_partes)
+
+
+def otimizar_estoque_inteligente_por_diametro_v33(
+    diametro,
+    df_demanda_diametro,
+    df_estoque_diametro,
+    kerf,
+    limite_retalho,
+    desperdicio_max_recomendado,
+    barra_padrao,
+    modelo_valor=None,
+    modo="EMERGENCIAL",
+):
+    """
+    Modelo unificado de estoque.
+
+    PLANEJADO COM ESTOQUE:
+      1) minimiza total de fontes físicas usadas;
+      2) minimiza desperdício;
+      3) minimiza barras complementares;
+      4) minimiza fragmentação;
+      5) maximiza valor futuro líquido do estoque.
+
+    EMERGENCIAL:
+      1) minimiza desperdício;
+      2) minimiza uso de barras novas;
+      3) minimiza barras complementares;
+      4) minimiza fragmentação;
+      5) maximiza valor futuro líquido do estoque.
+
+    Em ambos os casos a demanda é uma igualdade; uma classe virtual de barra
+    padrão é incluída no próprio solver para evitar faltas quando há solução física.
+    """
+    comprimentos = sorted(df_demanda_diametro["COMPRIMENTO"].astype(float).tolist(), reverse=True)
+    demanda_map = dict(zip(
+        df_demanda_diametro["COMPRIMENTO"].astype(float),
+        df_demanda_diametro["DEMANDA"].astype(int),
+    ))
+    demandas = [int(demanda_map[c]) for c in comprimentos]
+
+    invalidas = [c for c in comprimentos if c + kerf > barra_padrao]
+    if invalidas:
+        raise ValueError(
+            f"Ø{diametro:g}: existem peças que não cabem na barra padrão de {barra_padrao:g} mm: {invalidas}"
+        )
+
+    classes = _classes_estoque_complemento_v33(df_estoque_diametro, barra_padrao, demandas)
+    registros = _montar_registros_padroes_v33(
+        classes, comprimentos, demandas, kerf, limite_retalho, modelo_valor, diametro
+    )
+
+    inicio = time.monotonic()
+    if str(modo).upper() == "PLANEJADO":
+        sequencia = [
+            ("fontes", "min", "mínimo de fontes/barras"),
+            ("desperdicio", "min", "mínimo desperdício"),
+            ("complementares", "min", "mínimo de barras complementares"),
+            ("fragmentacao", "min", "mínima fragmentação"),
+            ("valor_futuro", "max", "máximo valor futuro do estoque"),
+        ]
+    else:
+        sequencia = [
+            ("desperdicio", "min", "mínimo desperdício"),
+            ("novas", "min", "mínimo uso de barras novas"),
+            ("complementares", "min", "mínimo de barras complementares"),
+            ("fragmentacao", "min", "mínima fragmentação"),
+            ("valor_futuro", "max", "máximo valor futuro do estoque"),
+        ]
+
+    valores, status_texto = _resolver_lexicografico_v33(classes, registros, demandas, sequencia, inicio)
+    if valores is None:
+        raise RuntimeError(f"Ø{diametro:g}: não foi encontrada solução viável.")
+
+    linhas = []
+    total_desperdicio = 0.0
+    total_retalho = 0.0
+    total_sobra = 0.0
+    novas_usadas = 0
+    retalhos_usados = 0
+    complementares = 0
+    total_fontes = 0
+    valor_futuro_total = 0.0
+    id_padrao = 1
+
+    for j, vezes in enumerate(valores):
+        if vezes <= 0:
+            continue
+        reg = registros[j]
+        classe = classes[reg["classe"]]
+        sobra = float(reg["sobra"])
+        total_fontes += vezes
+        total_sobra += sobra * vezes
+        valor_futuro_total += float(reg["delta_valor"]) * vezes
+
+        if classe["tipo"] == "RETALHO":
+            retalhos_usados += vezes
+        else:
+            novas_usadas += vezes
+        if classe.get("virtual"):
+            complementares += vezes
+
+        if sobra >= limite_retalho:
+            classificacao = "RETALHO REAPROVEITAVEL"
+            total_retalho += sobra * vezes
+        else:
+            classificacao = "DESPERDICIO"
+            total_desperdicio += sobra * vezes
+
+        partes = [
+            f"{qtd}x({comp:g}mm)"
+            for qtd, comp in zip(reg["padrao"], comprimentos)
+            if qtd > 0
+        ]
+        prefixo = "PI" if str(modo).upper() == "PLANEJADO" else "EI"
+        linhas.append(
+            {
+                "MODO": str(modo).upper(),
+                "DIAMETRO": diametro,
+                "ID_PADRAO": f"{prefixo}{diametro:g}-{id_padrao}",
+                "TIPO_FONTE": classe["tipo"],
+                "COMPRIMENTO_FONTE_MM": classe["comprimento"],
+                "QTD_BARRAS": vezes,
+                "ESQUEMA_DE_CORTE": " + ".join(partes),
+                "SOBRA_POR_BARRA_MM": sobra,
+                "CLASSIFICACAO_SOBRA": classificacao,
+                "ORIGEM_PLANO": classe["origem"],
+                "VALOR_FUTURO_CRITERIO_MM": reg["valor_sobra"],
+                "VALOR_ORIGEM_ESTOQUE_MM": reg["valor_origem"],
+                "DELTA_VALOR_ESTOQUE_MM": reg["delta_valor"],
+            }
+        )
+        id_padrao += 1
+
+    demanda_total_mm = sum(c * d for c, d in zip(comprimentos, demandas))
+    material_usado = sum(
+        classes[registros[j]["classe"]]["comprimento"] * int(valores[j])
+        for j in range(len(registros))
+        if int(valores[j]) > 0
+    )
+    aproveitamento = 100.0 * demanda_total_mm / material_usado if material_usado else 0.0
+
+    resumo = {
+        "DIAMETRO": diametro,
+        "DEMANDA_TOTAL_PECAS": int(sum(demandas)),
+        "DEMANDA_TOTAL_MM": round(demanda_total_mm, 2),
+        "DEMANDA_ATENDIDA_MM": round(demanda_total_mm, 2),
+        "PECAS_ATENDIDAS": int(sum(demandas)),
+        "PECAS_FALTANTES": 0,
+        "ATENDIMENTO_PERCENTUAL": 100.0,
+        "BARRAS_NOVAS_USADAS": int(novas_usadas),
+        "RETALHOS_USADOS": int(retalhos_usados),
+        "TOTAL_FONTES_USADAS": int(total_fontes),
+        "SOBRA_FISICA_TOTAL_MM": round(total_sobra, 2),
+        "DESPERDICIO_REAL_MM": round(total_desperdicio, 2),
+        "DESPERDICIO_MAX_RECOMENDADO_MM": round(desperdicio_max_recomendado, 2),
+        "RETALHO_REAPROVEITAVEL_MM": round(total_retalho, 2),
+        "VALOR_FUTURO_TOTAL": round(valor_futuro_total, 3),
+        "APROVEITAMENTO_PERCENTUAL": round(aproveitamento, 2),
+        "BARRAS_ADICIONAIS_RECOMENDADAS": int(complementares),
+        "ATENDIMENTO_FINAL_PERCENTUAL": 100.0,
+        "STATUS": status_texto,
+        "PADROES_GERADOS": len(registros),
+    }
+
+    recomendacao = []
+    if complementares > 0:
+        recomendacao.append(
+            {
+                "DIAMETRO": diametro,
+                "BARRAS_PADRAO_RECOMENDADAS": int(complementares),
+                "COMPRIMENTO_BARRA_MM": float(barra_padrao),
+                "ATENDIMENTO_FINAL_PERCENTUAL": 100.0,
+                "OBSERVACAO": "Barras padrão incluídas automaticamente pelo solver para completar a demanda.",
+            }
+        )
+
+    comparacao = [
+        {
+            "DIAMETRO": diametro,
+            "CENARIO": "PLANO_ESTOQUE_INTELIGENTE",
+            "BARRAS_NOVAS": int(novas_usadas),
+            "RETALHOS_USADOS": int(retalhos_usados),
+            "FONTES_TOTAIS": int(total_fontes),
+            "DESPERDICIO_REAL_MM": round(total_desperdicio, 2),
+            "RETALHO_REAPROVEITAVEL_MM": round(total_retalho, 2),
+            "VALOR_FUTURO_TOTAL": round(valor_futuro_total, 3),
+        }
+    ]
+    return linhas, resumo, [], recomendacao, comparacao
+
+
+def _plano_resumido_v33(plano):
+    if plano is None or not isinstance(plano, pd.DataFrame) or plano.empty:
+        return pd.DataFrame([{"STATUS": "NENHUM CORTE GERADO"}])
+
+    df = plano.copy()
+    if "PIV_OFERTA_LINHAS_ATENDIDAS" not in df.columns and "PIV_LINHAS_ATENDIDAS" in df.columns:
+        df["PIV_OFERTA_LINHAS_ATENDIDAS"] = df["PIV_LINHAS_ATENDIDAS"]
+
+    desejadas = [
+        "ID_BARRA",
+        "DIAMETRO",
+        "TIPO_FONTE",
+        "COMPRIMENTO_FONTE_MM",
+        "ESQUEMA_DE_CORTE",
+        "PIV_OFERTA_LINHAS_ATENDIDAS",
+        "SOBRA_POR_BARRA_MM",
+        "CLASSIFICACAO_SOBRA",
+        "VALOR_FUTURO_CRITERIO_MM",
+        "ORIGEM_PLANO",
+    ]
+    cols = [c for c in desejadas if c in df.columns]
+    return df[cols].copy()
+
+
+def _metodo_df_v33(modo, arquivo_demanda=None, arquivo_lab=None, arquivo_estoque=None, horizonte=None, observacao=None, parametros=None):
+    parametros = parametros or {}
+    linhas = [
+        ("VERSAO", VERSAO_INDUSTRIAL),
+        ("MODO", modo),
+        ("ARQUIVO_DEMANDA", arquivo_demanda or "NÃO INFORMADO"),
+        ("MODELO", "CSPUL / programação inteira por padrões de corte"),
+        ("PRINCIPIA_LAB", arquivo_lab or "NÃO INFORMADO - fallback por concentração"),
+        ("ESTOQUE", arquivo_estoque or "NÃO INFORMADO"),
+        ("HORIZONTE_VALOR", horizonte or "MEDIA"),
+        ("BARRA_PADRAO_MM", parametros.get("barra_padrao", BARRA_PADRAO_DEFAULT)),
+        ("KERF_MM", parametros.get("kerf", KERF_DEFAULT)),
+        ("LIMITE_RETALHO_MM", parametros.get("limite_retalho", LIMITE_RETALHO_DEFAULT)),
+        ("DESPERDICIO_MAX_RECOMENDADO_MM", parametros.get("desperdicio_max", DESPERDICIO_MAX_RECOMENDADO_DEFAULT)),
+        ("TEMPO_MAX_SOLVER_POR_DIAMETRO_S", TEMPO_LIMITE_OTIMIZACAO_MS / 1000.0),
+        ("BANCO_LOCAL", str(caminho_banco_principia())),
+        ("GERADO_EM", datetime.now().strftime("%d/%m/%Y %H:%M:%S")),
+    ]
+    if observacao:
+        linhas.append(("OBSERVACAO", observacao))
+    return pd.DataFrame(linhas, columns=["CAMPO", "VALOR"])
+
+
+def _formatar_excel_v33(writer, nome_plano="PLANO_DE_CORTE", nome_metodo="METODO"):
+    try:
+        from openpyxl.styles import Font, PatternFill, Alignment
+        wb = writer.book
+        for nome in (nome_plano, nome_metodo):
+            if nome not in wb.sheetnames:
+                continue
+            ws = wb[nome]
+            header_fill = PatternFill("solid", fgColor="17365D")
+            for cell in ws[1]:
+                cell.fill = header_fill
+                cell.font = Font(color="FFFFFF", bold=True)
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            ws.freeze_panes = "A2"
+            ws.auto_filter.ref = ws.dimensions
+            for col in ws.columns:
+                letra = col[0].column_letter
+                tamanho = min(65, max(12, max(len(str(c.value or "")) for c in col) + 2))
+                ws.column_dimensions[letra].width = tamanho
+    except Exception:
+        pass
+
+
+def exportar_excel_planejado(
+    caminho_demanda,
+    plano,
+    resumo=None,
+    demanda=None,
+    comparacao=None,
+    arquivo_lab=None,
+    arquivo_estoque=None,
+    horizonte=None,
+    parametros=None,
+    **kwargs,
+):
+    pasta = os.path.dirname(caminho_demanda)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    caminho = os.path.join(pasta, f"Plano_Corte_Planejado_V33_{timestamp}.xlsx")
+    plano_saida = _plano_resumido_v33(plano)
+    metodo = _metodo_df_v33(
+        "PLANEJADO",
+        arquivo_demanda=caminho_demanda,
+        arquivo_lab=arquivo_lab,
+        arquivo_estoque=arquivo_estoque,
+        horizonte=horizonte,
+        parametros=parametros,
+        observacao=(
+            "Com estoque: mínimo de fontes -> mínimo desperdício -> mínimo complemento -> "
+            "mínima fragmentação -> máximo valor futuro. Sem estoque: motor planejado original."
+        ),
+    )
+    with pd.ExcelWriter(caminho, engine="openpyxl") as writer:
+        plano_saida.to_excel(writer, sheet_name="PLANO_DE_CORTE", index=False)
+        metodo.to_excel(writer, sheet_name="METODO", index=False)
+        _formatar_excel_v33(writer)
+    return caminho
+
+
+def exportar_excel_emergencial(
+    caminho_demanda,
+    plano,
+    resumo=None,
+    faltas=None,
+    recomendacoes=None,
+    demanda=None,
+    estoque=None,
+    estoque_final=None,
+    movimentos=None,
+    arquivo_lab=None,
+    arquivo_estoque=None,
+    horizonte=None,
+    parametros=None,
+    **kwargs,
+):
+    pasta = os.path.dirname(caminho_demanda)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    caminho = os.path.join(pasta, f"Plano_Corte_Emergencial_V33_{timestamp}.xlsx")
+    plano_saida = _plano_resumido_v33(plano)
+    metodo = _metodo_df_v33(
+        "EMERGENCIAL",
+        arquivo_demanda=caminho_demanda,
+        arquivo_lab=arquivo_lab,
+        arquivo_estoque=arquivo_estoque,
+        horizonte=horizonte,
+        parametros=parametros,
+        observacao=(
+            "Atendimento exato: o solver usa retalhos existentes e pode liberar barras novas "
+            "quando isso reduz desperdício; o Principia Lab entra no critério de valor futuro."
+        ),
+    )
+    with pd.ExcelWriter(caminho, engine="openpyxl") as writer:
+        plano_saida.to_excel(writer, sheet_name="PLANO_DE_CORTE", index=False)
+        metodo.to_excel(writer, sheet_name="METODO", index=False)
+        _formatar_excel_v33(writer)
+    return caminho
+
+
+def _svg_barra_v33(row):
+    fonte = float(row.get("COMPRIMENTO_FONTE_MM", 0) or 0)
+    sobra = float(row.get("SOBRA_POR_BARRA_MM", 0) or 0)
+    if fonte <= 0:
+        return ""
+    cortes = _extrair_cortes_do_esquema(row.get("ESQUEMA_DE_CORTE", ""))
+    largura_svg = 1120.0
+    altura = 58
+    x = 0.0
+    elementos = []
+    for comp, qtd in cortes:
+        for _ in range(int(qtd)):
+            w = max(1.0, largura_svg * float(comp) / fonte)
+            elementos.append(
+                f'<rect x="{x:.2f}" y="0" width="{w:.2f}" height="{altura}" fill="#2F6DB5" stroke="#FFFFFF" stroke-width="1"/>'
+            )
+            if w >= 46:
+                elementos.append(
+                    f'<text x="{x + w/2:.2f}" y="35" text-anchor="middle" font-size="17" font-family="Arial" font-weight="700" fill="#FFFFFF">{comp:g}</text>'
+                )
+            x += w
+    if sobra > 0:
+        w = max(1.0, largura_svg * sobra / fonte)
+        cor = "#BFDDA8" if "RETALHO" in str(row.get("CLASSIFICACAO_SOBRA", "")) else "#C8CDD3"
+        elementos.append(
+            f'<rect x="{x:.2f}" y="0" width="{w:.2f}" height="{altura}" fill="{cor}" stroke="#FFFFFF" stroke-width="1"/>'
+        )
+        if w >= 46:
+            elementos.append(
+                f'<text x="{x + w/2:.2f}" y="35" text-anchor="middle" font-size="17" font-family="Arial" font-weight="700" fill="#172033">{sobra:g}</text>'
+            )
+    elementos.append(
+        f'<rect x="0" y="0" width="{largura_svg}" height="{altura}" fill="none" stroke="#111827" stroke-width="3"/>'
+    )
+    return f'<svg viewBox="0 0 {largura_svg:g} {altura}" width="100%" height="58" xmlns="http://www.w3.org/2000/svg">{"".join(elementos)}</svg>'
+
+
+def gerar_folha_visual_html(plano, caminho_excel, logo_path=None, titulo="Principia Minima - Plano de Corte"):
+    if plano is None or not isinstance(plano, pd.DataFrame) or plano.empty:
+        return None
+
+    pasta = os.path.dirname(caminho_excel)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    caminho = os.path.join(pasta, f"Plano_Visual_Corte_V33_{timestamp}.html")
+    logo_uri = _arquivo_para_data_uri(logo_path)
+    logo_html = (
+        f'<img class="logo" src="{logo_uri}" alt="MR">'
+        if logo_uri
+        else '<div class="logo-texto">MR | PRINCIPIA MINIMA</div>'
+    )
+
+    registros = plano.to_dict(orient="records")
+    paginas = [
+        registros[i:i + BARRAS_POR_FOLHA_IMPRESSAO]
+        for i in range(0, len(registros), BARRAS_POR_FOLHA_IMPRESSAO)
+    ]
+    total_paginas = len(paginas)
+    paginas_html = []
+
+    for pidx, pagina in enumerate(paginas, start=1):
+        cards = []
+        for row in pagina:
+            referencia = html.escape(str(row.get(
+                "PIV_OFERTA_LINHAS_ATENDIDAS",
+                row.get("PIV_LINHAS_ATENDIDAS", ""),
+            )))
+            origem = html.escape(str(row.get("ORIGEM_PLANO", "")))
+            cenario = html.escape(str(row.get("CENARIO", "")))
+            cards.append(
+                f"""
+                <section class="barra-card">
+                    <div class="barra-titulo">
+                        <strong>{html.escape(str(row.get('ID_BARRA', row.get('ID_PADRAO', ''))))}</strong>
+                        <span>{cenario}</span>
+                        <span>Ø{float(row.get('DIAMETRO', 0) or 0):g}</span>
+                        <span>Fonte: {float(row.get('COMPRIMENTO_FONTE_MM', 0) or 0):g} mm</span>
+                        <span>{html.escape(str(row.get('TIPO_FONTE', '')))}</span>
+                        <span>{origem}</span>
+                    </div>
+                    {_svg_barra_v33(row)}
+                    <div class="referencia">{referencia}</div>
+                </section>
+                """
+            )
+
+        paginas_html.append(
+            f"""
+            <section class="folha {'ultima' if pidx == total_paginas else ''}">
+                <header>
+                    <div>{logo_html}</div>
+                    <div class="cabecalho-direita">
+                        <h1>{html.escape(titulo)}</h1>
+                        <div class="meta">Gerado em {datetime.now():%d/%m/%Y %H:%M}</div>
+                        <div class="pagina-num">Folha {pidx} / {total_paginas}</div>
+                    </div>
+                </header>
+                <div class="legenda">
+                    <span><i class="peca-box"></i>Peça</span>
+                    <span><i class="retalho-box"></i>Retalho reaproveitável</span>
+                    <span><i class="desperdicio-box"></i>Desperdício</span>
+                </div>
+                {''.join(cards)}
+                <footer>PRINCIPIA MINIMA • {html.escape(str(VERSAO_INDUSTRIAL))} • Folha {pidx} / {total_paginas}</footer>
+            </section>
+            """
+        )
+
+    documento = f"""<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>{html.escape(titulo)}</title>
+<style>
+* {{ box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }}
+html, body {{ margin: 0; padding: 0; background: #EEF2F6; font-family: Arial, sans-serif; color: #172033; }}
+.folha {{ width: 297mm; min-height: 210mm; margin: 8mm auto; padding: 8mm 10mm 7mm; background: #FFFFFF; page-break-after: always; break-after: page; box-shadow: 0 1px 12px rgba(0,0,0,.12); position: relative; }}
+.folha.ultima {{ page-break-after: auto; break-after: auto; }}
+header {{ display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #17365D; padding-bottom: 4mm; margin-bottom: 3mm; }}
+.logo {{ max-height: 16mm; max-width: 38mm; }}
+.logo-texto {{ font-size: 17pt; font-weight: 700; color: #17365D; }}
+.cabecalho-direita {{ text-align: right; }}
+h1 {{ font-size: 15pt; margin: 0; color: #17365D; }}
+.meta {{ color: #64748B; font-size: 8.5pt; margin-top: 1mm; }}
+.pagina-num {{ color: #17365D; font-size: 10pt; font-weight: 700; margin-top: 1mm; }}
+.legenda {{ display: flex; gap: 7mm; font-size: 8.5pt; margin: 2mm 0 3mm; }}
+.legenda i {{ display: inline-block; width: 4mm; height: 4mm; vertical-align: -0.7mm; margin-right: 1.2mm; border: 1px solid #334155; }}
+.peca-box {{ background: #2F6DB5; }} .retalho-box {{ background: #BFDDA8; }} .desperdicio-box {{ background: #C8CDD3; }}
+.barra-card {{ break-inside: avoid; page-break-inside: avoid; margin: 0 0 4mm; border: 1px solid #CBD5E1; border-radius: 2mm; padding: 2.5mm; }}
+.barra-titulo {{ display: flex; gap: 4mm; align-items: center; font-size: 8.5pt; margin-bottom: 1.5mm; color: #334155; }}
+.barra-titulo strong {{ color: #17365D; font-size: 9pt; }}
+.referencia {{ font-size: 7.8pt; color: #475569; margin-top: 1mm; min-height: 4mm; }}
+footer {{ position: absolute; left: 10mm; right: 10mm; bottom: 4mm; border-top: 1px solid #CBD5E1; padding-top: 1.5mm; font-size: 7.5pt; color: #64748B; text-align: right; }}
+@page {{ size: A4 landscape; margin: 0; }}
+@media print {{
+  html, body {{ background: #FFFFFF !important; }}
+  .folha {{ margin: 0; box-shadow: none; width: 297mm; min-height: 210mm; }}
+}}
+</style>
+</head>
+<body>
+{''.join(paginas_html)}
+</body>
+</html>"""
+    Path(caminho).write_text(documento, encoding="utf-8")
+    return caminho
+
+
+class PrincipiaMinimaV33App(PrincipiaMinimaFactoryApp):
+    """V3: integra estoque + Principia Lab nos dois fluxos operacionais."""
+
+    def __init__(self):
+        self.caminho_estoque_planejado = None
+        self.caminho_lab_emergencial = None
+        super().__init__()
+        # Reaproveita último Lab salvo, mas mantém seleções independentes na UI.
+        if not self.caminho_lab_emergencial:
+            self.caminho_lab_emergencial = getattr(self, "caminho_lab_planejado", None)
+        self.title("Principia Minima • Factory Intelligence V3")
+
+    def selecionar_estoque_planejado(self):
+        caminho = filedialog.askopenfilename(
+            title="Selecione o estoque atual para o Planejamento Inteligente",
+            filetypes=[
+                ("Planilhas", "*.xlsx *.xlsm *.xls *.csv"),
+                ("Excel", "*.xlsx *.xlsm *.xls"),
+                ("CSV", "*.csv"),
+            ],
+        )
+        if caminho:
+            self.caminho_estoque_planejado = caminho
+            if hasattr(self, "label_estoque_p"):
+                self.label_estoque_p.config(text=os.path.basename(caminho))
+
+    def selecionar_lab_emergencial(self):
+        caminho = filedialog.askopenfilename(
+            title="Selecione os resultados do Principia Lab para o modo Emergencial",
+            filetypes=[("Excel", "*.xlsx")],
+        )
+        if caminho:
+            try:
+                teste = ModeloValorRetalho(caminho, "MEDIA")
+                if not teste.disponivel:
+                    raise ValueError("Nenhum dado de valor foi encontrado na aba VALOR_RETALHOS.")
+                self.caminho_lab_emergencial = caminho
+                self.config_local["ultimo_lab"] = caminho
+                salvar_config(self.config_local)
+                if hasattr(self, "label_lab_e"):
+                    self.label_lab_e.config(text=os.path.basename(caminho))
+            except Exception as exc:
+                messagebox.showerror("Principia Lab", str(exc))
+
+    def mostrar_planejado(self):
+        self.limpar()
+        self.caminho_demanda_planejado = None
+        self.caminho_estoque_planejado = None
+        self._header(self, "PLANEJAMENTO INTELIGENTE", "Demanda futura + estoque opcional + Principia Lab")
+        self._back_toolbar(self, "Planejamento futuro")
+
+        notebook = ttk.Notebook(self)
+        notebook.pack(fill="both", expand=True, padx=18, pady=(0, 12))
+        tab_setup = ttk.Frame(notebook, padding=14)
+        tab_stock = ttk.Frame(notebook, padding=14)
+        tab_lab = ttk.Frame(notebook, padding=14)
+        notebook.add(tab_setup, text="Configuração")
+        notebook.add(tab_stock, text="Estoque atual (opcional)")
+        notebook.add(tab_lab, text="Principia Lab")
+
+        params = ttk.LabelFrame(tab_setup, text="Parâmetros físicos", padding=14, style="Card.TLabelframe")
+        params.pack(fill="x", pady=(0, 12))
+        fields = [
+            ("Barra padrão (mm)", "entry_barra_p", BARRA_PADRAO_DEFAULT),
+            ("Kerf (mm)", "entry_kerf_p", KERF_DEFAULT),
+            ("Limite retalho (mm)", "entry_retalho_p", LIMITE_RETALHO_DEFAULT),
+            ("Desperdício máx. recomendado (mm)", "entry_desperdicio_max_p", DESPERDICIO_MAX_RECOMENDADO_DEFAULT),
+        ]
+        for i, (label, attr, default) in enumerate(fields):
+            ttk.Label(params, text=label, style="White.TLabel").grid(row=0, column=i, padx=8, sticky="w")
+            entry = ttk.Entry(params, width=22)
+            entry.insert(0, str(default))
+            entry.grid(row=1, column=i, padx=8, pady=(5, 0), sticky="ew")
+            params.columnconfigure(i, weight=1)
+            setattr(self, attr, entry)
+
+        file_card = ttk.LabelFrame(tab_setup, text="Demanda", padding=14, style="Card.TLabelframe")
+        file_card.pack(fill="x", pady=(0, 12))
+        ttk.Button(file_card, text="Selecionar demanda (.csv/.xlsx)", style="Accent.TButton", command=self.selecionar_demanda_planejado).pack(side="left")
+        self.label_demanda_p = ttk.Label(file_card, text="Nenhum arquivo selecionado.", style="White.TLabel")
+        self.label_demanda_p.pack(side="left", padx=14)
+        ttk.Label(
+            file_card,
+            text="Formato recomendado: PIV / OFERTA / LINHA / DIAMETRO / COMPRIMENTO / DEMANDA.",
+            style="MutedWhite.TLabel",
+        ).pack(anchor="w", pady=(12, 0))
+
+        run = ttk.Frame(tab_setup, style="Card.TFrame", padding=(18, 15))
+        run.pack(fill="x")
+        ttk.Label(run, text="EXECUÇÃO", style="CardTitle.TLabel").pack(anchor="w")
+        ttk.Label(run, text="Sem estoque informado, mantém o Planejamento Inteligente original. Com estoque, o solver passa a considerar os retalhos e barras existentes.", style="White.TLabel", wraplength=1050).pack(anchor="w", pady=(5, 10))
+        ttk.Button(run, text="OTIMIZAR + GERAR PLANO VISUAL", style="Accent.TButton", command=self.processar_planejado).pack(anchor="w")
+
+        stock_card = ttk.Frame(tab_stock, style="Card.TFrame", padding=(18, 16))
+        stock_card.pack(fill="x")
+        ttk.Label(stock_card, text="ESTOQUE DISPONÍVEL", style="CardTitle.TLabel").pack(anchor="w")
+        ttk.Label(stock_card, text="Opcional. Ao carregar este arquivo, o planejamento passa a decidir entre retalhos existentes e barras padrão.", style="White.TLabel", wraplength=1000).pack(anchor="w", pady=(6, 12))
+        ttk.Button(stock_card, text="Selecionar estoque (.csv/.xlsx)", style="Accent.TButton", command=self.selecionar_estoque_planejado).pack(anchor="w")
+        self.label_estoque_p = ttk.Label(stock_card, text="Nenhum arquivo de estoque selecionado.", style="White.TLabel")
+        self.label_estoque_p.pack(anchor="w", pady=(8, 0))
+        ttk.Label(stock_card, text="Colunas: DIAMETRO / COMPRIMENTO / QUANTIDADE. DATA_ENTRADA é opcional.", style="MutedWhite.TLabel").pack(anchor="w", pady=(6, 0))
+
+        lab_card = ttk.Frame(tab_lab, style="Card.TFrame", padding=(18, 16))
+        lab_card.pack(fill="x")
+        ttk.Label(lab_card, text="INTELIGÊNCIA HISTÓRICA", style="CardTitle.TLabel").pack(anchor="w")
+        ttk.Button(lab_card, text="Selecionar Principia_Lab_resultados.xlsx", style="Accent.TButton", command=self.selecionar_lab_planejado).pack(anchor="w", pady=(10, 6))
+        self.label_lab_p = ttk.Label(
+            lab_card,
+            text=(os.path.basename(self.caminho_lab_planejado) if self.caminho_lab_planejado else "Sem Lab: será usado fallback por concentração"),
+            style="White.TLabel",
+        )
+        self.label_lab_p.pack(anchor="w", pady=(2, 12))
+        ttk.Label(lab_card, text="Horizonte de valor:", style="White.TLabel").pack(anchor="w")
+        self.combo_horizonte_p = ttk.Combobox(lab_card, state="readonly", values=list(HORIZONTES_LAB.keys()), width=24)
+        self.combo_horizonte_p.set("Média 15/30/60")
+        self.combo_horizonte_p.pack(anchor="w", pady=(5, 0))
+
+    def mostrar_emergencial(self):
+        self.limpar()
+        self.caminho_demanda_emergencial = None
+        self.caminho_estoque_emergencial = None
+        self._header(self, "PLANEJAMENTO EMERGENCIAL", "Demanda rastreável + estoque atual + Principia Lab + barras novas quando necessário")
+        self._back_toolbar(self, "Modo operacional")
+
+        notebook = ttk.Notebook(self)
+        notebook.pack(fill="both", expand=True, padx=18, pady=(0, 12))
+        tab_input = ttk.Frame(notebook, padding=14)
+        tab_stock = ttk.Frame(notebook, padding=14)
+        tab_lab = ttk.Frame(notebook, padding=14)
+        notebook.add(tab_input, text="Demanda e parâmetros")
+        notebook.add(tab_stock, text="Estoque atual")
+        notebook.add(tab_lab, text="Principia Lab")
+
+        params = ttk.LabelFrame(tab_input, text="Parâmetros", padding=14, style="Card.TLabelframe")
+        params.pack(fill="x", pady=(0, 12))
+        fields = [
+            ("Kerf (mm)", "entry_kerf_e", KERF_DEFAULT),
+            ("Limite retalho (mm)", "entry_retalho_e", LIMITE_RETALHO_DEFAULT),
+            ("Barra padrão (mm)", "entry_barra_e", BARRA_PADRAO_DEFAULT),
+            ("Desperdício máx. recomendado (mm)", "entry_desperdicio_max_e", DESPERDICIO_MAX_RECOMENDADO_DEFAULT),
+        ]
+        for i, (label, attr, default) in enumerate(fields):
+            ttk.Label(params, text=label, style="White.TLabel").grid(row=0, column=i, padx=8, sticky="w")
+            entry = ttk.Entry(params, width=22)
+            entry.insert(0, str(default))
+            entry.grid(row=1, column=i, padx=8, pady=(5, 0), sticky="ew")
+            params.columnconfigure(i, weight=1)
+            setattr(self, attr, entry)
+
+        demand = ttk.LabelFrame(tab_input, text="Demanda", padding=14, style="Card.TLabelframe")
+        demand.pack(fill="x", pady=(0, 12))
+        ttk.Button(demand, text="Selecionar demanda (.csv/.xlsx)", style="Accent.TButton", command=self.selecionar_demanda_emergencial).pack(side="left")
+        self.label_demanda_e = ttk.Label(demand, text="Nenhum arquivo selecionado.", style="White.TLabel")
+        self.label_demanda_e.pack(side="left", padx=14)
+        ttk.Label(
+            demand,
+            text="Use o mesmo arquivo rastreável: PIV / OFERTA / LINHA / DIAMETRO / COMPRIMENTO / DEMANDA. O Excel final informa quais cortes atendem cada PIV/Linha.",
+            style="MutedWhite.TLabel",
+            wraplength=1050,
+        ).pack(anchor="w", pady=(12, 0))
+
+        run = ttk.Frame(tab_input, style="Card.TFrame", padding=(18, 15))
+        run.pack(fill="x")
+        ttk.Label(run, text="EXECUÇÃO", style="CardTitle.TLabel").pack(anchor="w")
+        ttk.Label(run, text="A demanda é atendida exatamente sempre que a peça cabe na barra padrão. O modelo matemático pode usar retalhos ou liberar barras novas quando isso produz um resultado melhor.", style="White.TLabel", wraplength=1050).pack(anchor="w", pady=(5, 10))
+        ttk.Button(run, text="OTIMIZAR DEMANDA E GERAR EXCEL", style="Accent.TButton", command=self.processar_emergencial).pack(anchor="w")
+
+        stock_file = ttk.LabelFrame(tab_stock, text="Planilha de estoque", padding=14, style="Card.TLabelframe")
+        stock_file.pack(fill="x", pady=(0, 12))
+        ttk.Button(stock_file, text="Selecionar estoque (.csv/.xlsx)", style="Accent.TButton", command=self.selecionar_estoque_emergencial).pack(side="left")
+        self.label_estoque_e = ttk.Label(stock_file, text="Nenhum arquivo de estoque selecionado.", style="White.TLabel")
+        self.label_estoque_e.pack(side="left", padx=14)
+
+        manual = ttk.LabelFrame(tab_stock, text="Inserção manual", padding=14, style="Card.TLabelframe")
+        manual.pack(fill="x", pady=(0, 12))
+        ttk.Label(manual, text="Diâmetro", style="White.TLabel").grid(row=0, column=0, padx=5, sticky="w")
+        self.entry_diametro_estoque_e = ttk.Entry(manual, width=14)
+        self.entry_diametro_estoque_e.grid(row=1, column=0, padx=5, pady=(4, 0))
+        ttk.Label(manual, text="Comprimento (mm)", style="White.TLabel").grid(row=0, column=1, padx=5, sticky="w")
+        self.entry_comprimento_estoque_e = ttk.Entry(manual, width=18)
+        self.entry_comprimento_estoque_e.grid(row=1, column=1, padx=5, pady=(4, 0))
+        ttk.Label(manual, text="Quantidade", style="White.TLabel").grid(row=0, column=2, padx=5, sticky="w")
+        self.entry_quantidade_estoque_e = ttk.Entry(manual, width=14)
+        self.entry_quantidade_estoque_e.grid(row=1, column=2, padx=5, pady=(4, 0))
+        ttk.Button(manual, text="Adicionar", style="Accent.TButton", command=self.adicionar_estoque_emergencial).grid(row=1, column=3, padx=8)
+        ttk.Button(manual, text="Remover selecionado", style="Secondary.TButton", command=self.remover_estoque_emergencial).grid(row=1, column=4, padx=5)
+
+        table_frame = ttk.Frame(tab_stock)
+        table_frame.pack(fill="both", expand=True)
+        self.tabela_estoque_e = ttk.Treeview(table_frame, columns=("diametro", "comprimento", "quantidade"), show="headings", height=9)
+        self.tabela_estoque_e.heading("diametro", text="DIÂMETRO")
+        self.tabela_estoque_e.heading("comprimento", text="COMPRIMENTO (mm)")
+        self.tabela_estoque_e.heading("quantidade", text="QUANTIDADE")
+        self.tabela_estoque_e.column("diametro", anchor="center", width=150)
+        self.tabela_estoque_e.column("comprimento", anchor="center", width=220)
+        self.tabela_estoque_e.column("quantidade", anchor="center", width=150)
+        self.tabela_estoque_e.pack(fill="both", expand=True)
+
+        lab_card = ttk.Frame(tab_lab, style="Card.TFrame", padding=(18, 16))
+        lab_card.pack(fill="x")
+        ttk.Label(lab_card, text="PRINCIPIA LAB NO MODO EMERGENCIAL", style="CardTitle.TLabel").pack(anchor="w")
+        ttk.Label(lab_card, text="O valor histórico do retalho entra na própria otimização, ajudando o solver a preservar um estoque final mais útil para demandas futuras.", style="White.TLabel", wraplength=1000).pack(anchor="w", pady=(6, 12))
+        ttk.Button(lab_card, text="Selecionar Principia_Lab_resultados.xlsx", style="Accent.TButton", command=self.selecionar_lab_emergencial).pack(anchor="w")
+        self.label_lab_e = ttk.Label(
+            lab_card,
+            text=(os.path.basename(self.caminho_lab_emergencial) if self.caminho_lab_emergencial else "Sem Lab: será usado fallback por concentração"),
+            style="White.TLabel",
+        )
+        self.label_lab_e.pack(anchor="w", pady=(8, 12))
+        ttk.Label(lab_card, text="Horizonte de valor:", style="White.TLabel").pack(anchor="w")
+        self.combo_horizonte_e = ttk.Combobox(lab_card, state="readonly", values=list(HORIZONTES_LAB.keys()), width=24)
+        self.combo_horizonte_e.set("Média 15/30/60")
+        self.combo_horizonte_e.pack(anchor="w", pady=(5, 0))
+
+    def processar_planejado(self):
+        if not self.caminho_demanda_planejado:
+            messagebox.showwarning("Demanda", "Selecione a planilha de demanda.")
+            return
+        try:
+            params = {
+                "tamanho_barra": float(self.entry_barra_p.get().replace(",", ".")),
+                "kerf": float(self.entry_kerf_p.get().replace(",", ".")),
+                "limite": float(self.entry_retalho_p.get().replace(",", ".")),
+                "desperdicio_max": float(self.entry_desperdicio_max_p.get().replace(",", ".")),
+                "horizonte_nome": self.combo_horizonte_p.get(),
+            }
+            if params["tamanho_barra"] <= 0 or params["kerf"] < 0 or params["limite"] < 0 or params["desperdicio_max"] < 0:
+                raise ValueError("Parâmetros físicos inválidos.")
+            demanda_path = self.caminho_demanda_planejado
+            estoque_path = self.caminho_estoque_planejado
+            lab_path = self.caminho_lab_planejado
+        except Exception as exc:
+            messagebox.showerror("Parâmetros", str(exc))
+            return
+
+        def worker(emit):
+            emit("stage", 2, 10, "Lendo e validando a demanda...", 4)
+            df_detalhada = ler_demanda_csv(demanda_path)
+            df_solver = agrupar_demanda_para_solver(df_detalhada)
+            horizonte = HORIZONTES_LAB.get(params["horizonte_nome"], "MEDIA")
+
+            emit("stage", 10, 18, "Carregando Principia Lab...", 3)
+            modelo = ModeloValorRetalho(lab_path, horizonte) if lab_path and os.path.exists(lab_path) else None
+
+            estoque = pd.DataFrame()
+            if estoque_path:
+                emit("stage", 18, 24, "Carregando estoque atual...", 3)
+                estoque = ler_estoque_csv(estoque_path, params["tamanho_barra"])
+
+            diametros = sorted(df_solver["DIAMETRO"].unique())
+            total_d = max(len(diametros), 1)
+            planos, resumos, comparacoes = [], [], []
+
+            for i, diam in enumerate(diametros, start=1):
+                ini = 24 + (i - 1) * 54 / total_d
+                fim = 24 + i * 54 / total_d
+                emit("stage", ini, fim, f"Otimizando Ø{diam:g} • {i}/{total_d}...", (total_d - i + 1) * (TEMPO_LIMITE_OTIMIZACAO_MS / 1000.0))
+                demanda_d = df_solver[df_solver["DIAMETRO"] == diam].copy()
+                if estoque_path:
+                    estoque_d = estoque[estoque["DIAMETRO"] == diam].copy()
+                    linhas, resumo, _, _, comp = otimizar_estoque_inteligente_por_diametro_v33(
+                        diam, demanda_d, estoque_d, params["kerf"], params["limite"],
+                        params["desperdicio_max"], params["tamanho_barra"], modelo_valor=modelo,
+                        modo="PLANEJADO",
+                    )
+                else:
+                    linhas, resumo, comp = otimizar_planejado_por_diametro(
+                        diam, demanda_d, params["tamanho_barra"], params["kerf"],
+                        params["limite"], params["desperdicio_max"], modelo_valor=modelo,
+                    )
+                planos.extend(linhas)
+                resumos.append(resumo)
+                comparacoes.extend(comp)
+
+            plano = pd.DataFrame(planos)
+            resumo = pd.DataFrame(resumos)
+            comparacao = pd.DataFrame(comparacoes)
+            emit("stage", 80, 87, "Aplicando rastreabilidade de PIV/Oferta/Linha...", 4)
+            plano = adicionar_rastreabilidade_ao_plano(plano, df_detalhada)
+            plano = anotar_valor_retalhos(plano, modelo, params["limite"], horizonte)
+
+            estoque_final = pd.DataFrame()
+            movimentos = pd.DataFrame()
+            if estoque_path:
+                estoque_final, movimentos = simular_estoque_final(estoque, plano, params["limite"])
+
+            emit("stage", 87, 94, "Gerando Excel resumido...", 3)
+            excel = exportar_excel_planejado(
+                demanda_path, plano, resumo,
+                df_detalhada.drop(columns=["_ORDEM"], errors="ignore"),
+                comparacao=comparacao, arquivo_lab=lab_path, arquivo_estoque=estoque_path,
+                horizonte=horizonte, parametros={
+                    "barra_padrao": params["tamanho_barra"], "kerf": params["kerf"],
+                    "limite_retalho": params["limite"], "desperdicio_max": params["desperdicio_max"],
+                },
+            )
+            emit("stage", 94, 99, "Gerando folhas coloridas para impressão...", 2)
+            visual = gerar_folha_visual_html(plano, excel, logo_path=self.logo_path, titulo="Principia Minima - Planejamento de Corte")
+            return {
+                "plano": plano, "resumo": resumo, "comparacao": comparacao,
+                "excel": excel, "visual": visual, "faltas": pd.DataFrame(),
+                "estoque": estoque, "estoque_final": estoque_final, "limite": params["limite"],
+                "horizonte": horizonte,
+                "parametros": {
+                    "barra_padrao": params["tamanho_barra"], "kerf": params["kerf"],
+                    "limite_retalho": params["limite"], "desperdicio_max": params["desperdicio_max"],
+                },
+            }
+
+        def success(data):
+            self._ultimo_plano = data["plano"]
+            self._ultima_comparacao = data["comparacao"]
+            self._ultimo_html = data["visual"]
+            self._ultimo_estoque_final = data["estoque_final"]
+            self._ultimo_limite_retalho = data["limite"]
+            self._ultima_execucao_id = registrar_execucao_historico(
+                modo="PLANEJADO", arquivo_demanda=demanda_path, arquivo_estoque=estoque_path,
+                resumo=data["resumo"], plano=data["plano"], excel_saida=data["excel"],
+                folha_visual=data["visual"], arquivo_lab=lab_path, horizonte_lab=data["horizonte"],
+                parametros=data["parametros"],
+                estoque_inicial=data["estoque"] if estoque_path else None,
+                estoque_final=data["estoque_final"] if estoque_path else None,
+            )
+            self.mostrar_resultado("PLANEJADO", data["resumo"], data["excel"], data["faltas"])
+
+        self._run_with_progress("Principia Minima • Planejamento Inteligente", worker, success)
+
+    def processar_emergencial(self):
+        if not self.caminho_demanda_emergencial:
+            messagebox.showwarning("Demanda", "Selecione a planilha de demanda.")
+            return
+        try:
+            params = {
+                "kerf": float(self.entry_kerf_e.get().replace(",", ".")),
+                "limite": float(self.entry_retalho_e.get().replace(",", ".")),
+                "barra_padrao": float(self.entry_barra_e.get().replace(",", ".")),
+                "desperdicio_max": float(self.entry_desperdicio_max_e.get().replace(",", ".")),
+                "horizonte_nome": self.combo_horizonte_e.get(),
+            }
+            if params["kerf"] < 0 or params["limite"] < 0 or params["barra_padrao"] <= 0 or params["desperdicio_max"] < 0:
+                raise ValueError("Parâmetros físicos inválidos.")
+            demanda_path = self.caminho_demanda_emergencial
+            estoque_path = self.caminho_estoque_emergencial
+            estoque = self.obter_estoque_emergencial(params["barra_padrao"])
+            lab_path = self.caminho_lab_emergencial
+        except Exception as exc:
+            messagebox.showerror("Parâmetros / Estoque", str(exc))
+            return
+
+        def worker(emit):
+            emit("stage", 2, 10, "Lendo demanda rastreável...", 4)
+            df_detalhada = ler_demanda_csv(demanda_path)
+            df_solver = agrupar_demanda_para_solver(df_detalhada)
+            horizonte = HORIZONTES_LAB.get(params["horizonte_nome"], "MEDIA")
+
+            emit("stage", 10, 17, "Carregando Principia Lab para decisão futura...", 3)
+            modelo = ModeloValorRetalho(lab_path, horizonte) if lab_path and os.path.exists(lab_path) else None
+
+            diametros = sorted(df_solver["DIAMETRO"].unique())
+            total_d = max(len(diametros), 1)
+            planos, resumos, faltas_total, recs_total, comps = [], [], [], [], []
+
+            for i, diam in enumerate(diametros, start=1):
+                ini = 17 + (i - 1) * 61 / total_d
+                fim = 17 + i * 61 / total_d
+                emit("stage", ini, fim, f"Otimizando estoque + barras novas Ø{diam:g} • {i}/{total_d}...", (total_d - i + 1) * (TEMPO_LIMITE_OTIMIZACAO_MS / 1000.0))
+                demanda_d = df_solver[df_solver["DIAMETRO"] == diam].copy()
+                estoque_d = estoque[estoque["DIAMETRO"] == diam].copy()
+                linhas, resumo, faltas, recs, comp = otimizar_estoque_inteligente_por_diametro_v33(
+                    diam, demanda_d, estoque_d, params["kerf"], params["limite"],
+                    params["desperdicio_max"], params["barra_padrao"], modelo_valor=modelo,
+                    modo="EMERGENCIAL",
+                )
+                planos.extend(linhas)
+                resumos.append(resumo)
+                faltas_total.extend(faltas)
+                recs_total.extend(recs)
+                comps.extend(comp)
+
+            plano = pd.DataFrame(planos)
+            resumo = pd.DataFrame(resumos)
+            faltas = pd.DataFrame(faltas_total)
+            recomendacoes = pd.DataFrame(recs_total)
+            comparacao = pd.DataFrame(comps)
+
+            emit("stage", 79, 86, "Atribuindo cortes aos PIVs, Ofertas e Linhas...", 4)
+            plano = adicionar_rastreabilidade_ao_plano(plano, df_detalhada)
+            plano = anotar_valor_retalhos(plano, modelo, params["limite"], horizonte)
+
+            emit("stage", 86, 91, "Simulando estoque final...", 3)
+            estoque_final, movimentos = simular_estoque_final(estoque, plano, params["limite"])
+
+            emit("stage", 91, 96, "Gerando Excel resumido...", 3)
+            excel = exportar_excel_emergencial(
+                demanda_path, plano, resumo, faltas, recomendacoes,
+                df_detalhada.drop(columns=["_ORDEM"], errors="ignore"), estoque,
+                estoque_final=estoque_final, movimentos=movimentos,
+                arquivo_lab=lab_path, arquivo_estoque=estoque_path, horizonte=horizonte,
+                parametros={
+                    "barra_padrao": params["barra_padrao"], "kerf": params["kerf"],
+                    "limite_retalho": params["limite"], "desperdicio_max": params["desperdicio_max"],
+                },
+            )
+            emit("stage", 96, 99, "Gerando folhas coloridas para impressão...", 2)
+            visual = gerar_folha_visual_html(plano, excel, logo_path=self.logo_path, titulo="Principia Minima - Corte Emergencial")
+            return {
+                "plano": plano, "resumo": resumo, "comparacao": comparacao,
+                "excel": excel, "visual": visual, "faltas": faltas,
+                "estoque_final": estoque_final, "limite": params["limite"],
+                "horizonte": horizonte,
+                "parametros": {
+                    "barra_padrao": params["barra_padrao"], "kerf": params["kerf"],
+                    "limite_retalho": params["limite"], "desperdicio_max": params["desperdicio_max"],
+                },
+            }
+
+        def success(data):
+            self._ultimo_plano = data["plano"]
+            self._ultima_comparacao = data["comparacao"]
+            self._ultimo_html = data["visual"]
+            self._ultimo_estoque_final = data["estoque_final"]
+            self._ultimo_limite_retalho = data["limite"]
+            self._ultima_execucao_id = registrar_execucao_historico(
+                modo="EMERGENCIAL", arquivo_demanda=demanda_path, arquivo_estoque=estoque_path,
+                resumo=data["resumo"], plano=data["plano"], excel_saida=data["excel"],
+                folha_visual=data["visual"], arquivo_lab=lab_path, horizonte_lab=data["horizonte"],
+                parametros=data["parametros"], estoque_inicial=estoque, estoque_final=data["estoque_final"],
+            )
+            self.mostrar_resultado("EMERGENCIAL", data["resumo"], data["excel"], data["faltas"])
+
+        self._run_with_progress("Principia Minima • Emergencial Inteligente", worker, success)
+
+
+
+# =====================================================================
+# PRINCIPIA MINIMA V3.4 - DUPLA ESTRATEGIA NO MODO SOB DEMANDA
+# =====================================================================
+# V3.4:
+# - entrega dois cenarios no modo Sob Demanda:
+#     1) MELHOR RESPOSTA GLOBAL
+#     2) MELHOR USO DOS RETALHOS / ESTOQUE
+# - adiciona proteção administrativa para apagar o histórico local.
+# - preserva Principia Lab, rastreabilidade, Excel resumido e feedback do operador.
+# =====================================================================
+
+from tkinter import simpledialog
+
+VERSAO_INDUSTRIAL = "3.4 Dual Strategy"
+ADMIN_HISTORICO_USUARIO = "admin"
+ADMIN_HISTORICO_SENHA = "MRBMODELOMATEMATICO"
+
+CENARIO_MELHOR = "1 - MELHOR RESPOSTA"
+CENARIO_RETALHOS = "2 - MELHOR USO DOS RETALHOS"
+
+
+def apagar_historico_local_protegido(usuario, senha):
+    """
+    Apaga somente o histórico operacional local do Principia Minima.
+    Não remove arquivos Excel/HTML já exportados nem o arquivo config.json.
+    """
+    if str(usuario) != ADMIN_HISTORICO_USUARIO or str(senha) != ADMIN_HISTORICO_SENHA:
+        raise PermissionError("Usuário ou senha inválidos.")
+
+    inicializar_feedback_operador()
+
+    with sqlite3.connect(caminho_banco_principia()) as con:
+        # Filhos primeiro para manter compatibilidade com foreign keys.
+        for tabela in (
+            "modelos_usados",
+            "feedback_operador",
+            "estoque_snapshot",
+            "retalhos",
+            "execucoes",
+        ):
+            try:
+                con.execute(f"DELETE FROM {tabela}")
+            except sqlite3.OperationalError:
+                pass
+
+        # Reinicia sequências de tabelas AUTOINCREMENT quando existirem.
+        try:
+            con.execute(
+                """
+                DELETE FROM sqlite_sequence
+                WHERE name IN (
+                    'modelos_usados',
+                    'feedback_operador',
+                    'estoque_snapshot',
+                    'retalhos'
+                )
+                """
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        con.commit()
+
+    # Compacta o arquivo após a exclusão.
+    try:
+        with sqlite3.connect(caminho_banco_principia()) as con:
+            con.execute("VACUUM")
+    except Exception:
+        pass
+
+    return True
+
+
+def _tempo_restante_v34(inicio, limite_ms):
+    decorrido = int((time.monotonic() - inicio) * 1000)
+    return max(0, int(limite_ms) - decorrido)
+
+
+def _montar_registros_padroes_v34(
+    classes,
+    comprimentos,
+    demandas,
+    kerf,
+    limite_retalho,
+    desperdicio_max_recomendado,
+    modelo_valor,
+    diametro,
+):
+    registros = []
+
+    for s, classe in enumerate(classes):
+        tamanho = float(classe["comprimento"])
+        padroes = gerar_padroes_completos(
+            comprimentos,
+            demandas,
+            tamanho,
+            kerf,
+        )
+
+        valor_origem = 0.0
+        if classe["tipo"] == "RETALHO":
+            valor_origem = _valor_retalho_v33(
+                modelo_valor,
+                diametro,
+                tamanho,
+                tamanho,
+            )
+
+        for p in padroes:
+            sobra = calcular_sobra(
+                p,
+                comprimentos,
+                tamanho,
+                kerf,
+            )
+
+            desperdicio = (
+                float(sobra)
+                if float(sobra) < float(limite_retalho)
+                else 0.0
+            )
+
+            excesso_recomendado = max(
+                0.0,
+                desperdicio - float(desperdicio_max_recomendado),
+            )
+
+            # Mantém a ideia histórica do projeto: acima do limite recomendado
+            # a parcela excedente recebe penalidade adicional, mas o padrão
+            # continua permitido.
+            custo_desperdicio = desperdicio + excesso_recomendado
+
+            reaproveitavel = 1 if sobra >= limite_retalho else 0
+
+            valor_sobra = (
+                _valor_retalho_v33(
+                    modelo_valor,
+                    diametro,
+                    sobra,
+                    tamanho,
+                )
+                if reaproveitavel
+                else 0.0
+            )
+
+            delta_valor = (
+                valor_sobra - valor_origem
+                if classe["tipo"] == "RETALHO"
+                else valor_sobra
+            )
+
+            demanda_nominal_padrao = sum(
+                float(qtd) * float(comp)
+                for qtd, comp in zip(p, comprimentos)
+            )
+
+            mm_demanda_via_retalho = (
+                demanda_nominal_padrao
+                if classe["tipo"] == "RETALHO"
+                else 0.0
+            )
+
+            registros.append(
+                {
+                    "classe": s,
+                    "padrao": tuple(p),
+                    "sobra": float(sobra),
+                    "desperdicio": float(desperdicio),
+                    "excesso_recomendado": float(excesso_recomendado),
+                    "custo_desperdicio": float(custo_desperdicio),
+                    "reaproveitavel": int(reaproveitavel),
+                    "valor_sobra": float(valor_sobra),
+                    "valor_origem": float(valor_origem),
+                    "delta_valor": float(delta_valor),
+                    "eh_nova": 1 if classe["tipo"] == "NOVA" else 0,
+                    "eh_retalho": 1 if classe["tipo"] == "RETALHO" else 0,
+                    "eh_virtual": 1 if classe.get("virtual") else 0,
+                    "demanda_nominal_padrao_mm": float(demanda_nominal_padrao),
+                    "uso_retalho_mm": float(mm_demanda_via_retalho),
+                }
+            )
+
+    return registros
+
+
+def _criar_modelo_v34(classes, registros, demandas, fixos=None):
+    fixos = fixos or {}
+    solver = criar_solver()
+
+    x = [
+        solver.IntVar(
+            0,
+            int(classes[r["classe"]]["quantidade"]),
+            f"x34_{idx}",
+        )
+        for idx, r in enumerate(registros)
+    ]
+
+    # Limite de disponibilidade física por classe.
+    for s, classe in enumerate(classes):
+        idxs = [
+            j
+            for j, r in enumerate(registros)
+            if r["classe"] == s
+        ]
+        if idxs:
+            solver.Add(
+                solver.Sum(x[j] for j in idxs)
+                <= int(classe["quantidade"])
+            )
+
+    # Demanda exata: sem sobreprodução e sem falta.
+    for i, demanda in enumerate(demandas):
+        solver.Add(
+            solver.Sum(
+                registros[j]["padrao"][i] * x[j]
+                for j in range(len(registros))
+            )
+            == int(demanda)
+        )
+
+    metricas = {
+        "fontes": solver.Sum(
+            x[j]
+            for j in range(len(registros))
+        ),
+        "desperdicio": solver.Sum(
+            int(round(registros[j]["desperdicio"] * ESCALA_V33))
+            * x[j]
+            for j in range(len(registros))
+        ),
+        "custo_desperdicio": solver.Sum(
+            int(round(registros[j]["custo_desperdicio"] * ESCALA_V33))
+            * x[j]
+            for j in range(len(registros))
+        ),
+        "novas": solver.Sum(
+            registros[j]["eh_nova"] * x[j]
+            for j in range(len(registros))
+        ),
+        "complementares": solver.Sum(
+            registros[j]["eh_virtual"] * x[j]
+            for j in range(len(registros))
+        ),
+        "fragmentacao": solver.Sum(
+            registros[j]["reaproveitavel"] * x[j]
+            for j in range(len(registros))
+        ),
+        "valor_futuro": solver.Sum(
+            int(round(registros[j]["delta_valor"] * ESCALA_V33))
+            * x[j]
+            for j in range(len(registros))
+        ),
+        "uso_retalho_mm": solver.Sum(
+            int(round(registros[j]["uso_retalho_mm"] * ESCALA_V33))
+            * x[j]
+            for j in range(len(registros))
+        ),
+    }
+
+    for nome, valor in fixos.items():
+        solver.Add(metricas[nome] == int(valor))
+
+    return solver, x, metricas
+
+
+def _coef_objetivo_v34(registro, metrica):
+    if metrica == "fontes":
+        return 1
+    if metrica == "novas":
+        return registro["eh_nova"]
+    if metrica == "complementares":
+        return registro["eh_virtual"]
+    if metrica == "fragmentacao":
+        return registro["reaproveitavel"]
+    if metrica == "desperdicio":
+        return int(round(registro["desperdicio"] * ESCALA_V33))
+    if metrica == "custo_desperdicio":
+        return int(round(registro["custo_desperdicio"] * ESCALA_V33))
+    if metrica == "valor_futuro":
+        return int(round(registro["delta_valor"] * ESCALA_V33))
+    if metrica == "uso_retalho_mm":
+        return int(round(registro["uso_retalho_mm"] * ESCALA_V33))
+    raise KeyError(metrica)
+
+
+def _resolver_lexicografico_v34(
+    classes,
+    registros,
+    demandas,
+    sequencia,
+    limite_ms,
+):
+    """
+    Resolve a sequência de objetivos com prioridade estrita.
+    A etapa seguinte somente é executada se a anterior teve ótimo comprovado.
+    """
+    if not registros:
+        raise RuntimeError(
+            "Nenhum padrão viável foi gerado para este diâmetro."
+        )
+
+    inicio = time.monotonic()
+    fixos = {}
+    valores_melhores = None
+    status_partes = []
+    hint = None
+    n_etapas = len(sequencia)
+
+    # Distribuição de tempo: mais orçamento às primeiras e à última etapa.
+    if n_etapas <= 1:
+        pesos = [1.0]
+    else:
+        pesos_base = [0.28, 0.18, 0.16, 0.14, 0.10, 0.14, 0.10]
+        pesos = pesos_base[:n_etapas]
+        soma = sum(pesos)
+        pesos = [p / soma for p in pesos]
+
+    for idx, (metrica, sentido, rotulo) in enumerate(sequencia):
+        restante = _tempo_restante_v34(inicio, limite_ms)
+        if restante <= 0:
+            status_partes.append(
+                "tempo esgotado antes de " + rotulo
+            )
+            break
+
+        solver, x, metricas = _criar_modelo_v34(
+            classes,
+            registros,
+            demandas,
+            fixos,
+        )
+
+        if sentido == "min":
+            solver.Minimize(metricas[metrica])
+        else:
+            solver.Maximize(metricas[metrica])
+
+        if hint is not None:
+            try:
+                solver.SetHint(x, hint)
+            except Exception:
+                pass
+
+        if idx < n_etapas - 1:
+            etapa_ms = max(
+                4000,
+                int(limite_ms * pesos[idx]),
+            )
+            solver.SetTimeLimit(
+                max(1, min(restante, etapa_ms))
+            )
+        else:
+            solver.SetTimeLimit(
+                max(1, restante)
+            )
+
+        status = solver.Solve()
+
+        if status not in (
+            pywraplp.Solver.OPTIMAL,
+            pywraplp.Solver.FEASIBLE,
+        ):
+            if valores_melhores is None:
+                raise RuntimeError(
+                    f"Nenhuma solução viável encontrada na etapa: {rotulo}."
+                )
+            status_partes.append(
+                f"{rotulo}: sem nova solução; anterior preservada"
+            )
+            break
+
+        valores = [
+            int(round(v.solution_value()))
+            for v in x
+        ]
+        valores_melhores = valores
+        hint = [float(v) for v in valores]
+
+        valor_obj = sum(
+            _coef_objetivo_v34(registros[j], metrica)
+            * valores[j]
+            for j in range(len(registros))
+        )
+
+        if status == pywraplp.Solver.OPTIMAL:
+            fixos[metrica] = int(valor_obj)
+            status_partes.append(
+                f"{rotulo}: ótimo comprovado"
+            )
+        else:
+            status_partes.append(
+                f"{rotulo}: melhor viável; ótimo não comprovado"
+            )
+            break
+
+    return valores_melhores, " | ".join(status_partes)
+
+
+def otimizar_estoque_cenario_v34(
+    diametro,
+    df_demanda_diametro,
+    df_estoque_diametro,
+    kerf,
+    limite_retalho,
+    desperdicio_max_recomendado,
+    barra_padrao,
+    modelo_valor=None,
+    estrategia="MELHOR_RESPOSTA",
+    limite_ms=None,
+):
+    """
+    Duas respostas para o Modo Sob Demanda.
+
+    MELHOR_RESPOSTA:
+        1) menor custo de desperdício;
+        2) menor uso de barras novas;
+        3) menor uso de barras complementares;
+        4) menor fragmentação;
+        5) maior valor futuro.
+
+    MELHOR_USO_RETALHOS:
+        1) maximiza mm da demanda atendidos por retalhos existentes;
+        2) minimiza barras complementares;
+        3) minimiza custo de desperdício;
+        4) minimiza quantidade total de fontes;
+        5) minimiza fragmentação;
+        6) maximiza valor futuro.
+
+    Em ambos os cenários:
+        - atendimento é exato;
+        - a disponibilidade física do estoque é respeitada;
+        - barras padrão virtuais garantem complemento quando necessário.
+    """
+    comprimentos = sorted(
+        df_demanda_diametro["COMPRIMENTO"].astype(float).tolist(),
+        reverse=True,
+    )
+    demanda_map = dict(
+        zip(
+            df_demanda_diametro["COMPRIMENTO"].astype(float),
+            df_demanda_diametro["DEMANDA"].astype(int),
+        )
+    )
+    demandas = [
+        int(demanda_map[c])
+        for c in comprimentos
+    ]
+
+    invalidas = [
+        c
+        for c in comprimentos
+        if c + kerf > barra_padrao
+    ]
+    if invalidas:
+        raise ValueError(
+            f"Ø{diametro:g}: existem peças que não cabem na "
+            f"barra padrão de {barra_padrao:g} mm: {invalidas}"
+        )
+
+    classes = _classes_estoque_complemento_v33(
+        df_estoque_diametro,
+        barra_padrao,
+        demandas,
+    )
+
+    registros = _montar_registros_padroes_v34(
+        classes,
+        comprimentos,
+        demandas,
+        kerf,
+        limite_retalho,
+        desperdicio_max_recomendado,
+        modelo_valor,
+        diametro,
+    )
+
+    if limite_ms is None:
+        limite_ms = max(
+            30000,
+            int(TEMPO_LIMITE_OTIMIZACAO_MS // 2),
+        )
+
+    estrategia = str(estrategia).upper()
+
+    if estrategia == "MELHOR_USO_RETALHOS":
+        cenario = CENARIO_RETALHOS
+        sequencia = [
+            (
+                "uso_retalho_mm",
+                "max",
+                "máximo atendimento por retalhos existentes",
+            ),
+            (
+                "complementares",
+                "min",
+                "mínimo de barras complementares",
+            ),
+            (
+                "custo_desperdicio",
+                "min",
+                "mínimo custo de desperdício",
+            ),
+            (
+                "fontes",
+                "min",
+                "mínimo total de fontes",
+            ),
+            (
+                "fragmentacao",
+                "min",
+                "mínima fragmentação",
+            ),
+            (
+                "valor_futuro",
+                "max",
+                "máximo valor futuro do estoque",
+            ),
+        ]
+    else:
+        cenario = CENARIO_MELHOR
+        sequencia = [
+            (
+                "custo_desperdicio",
+                "min",
+                "mínimo custo de desperdício",
+            ),
+            (
+                "novas",
+                "min",
+                "mínimo uso de barras novas",
+            ),
+            (
+                "complementares",
+                "min",
+                "mínimo de barras complementares",
+            ),
+            (
+                "fragmentacao",
+                "min",
+                "mínima fragmentação",
+            ),
+            (
+                "valor_futuro",
+                "max",
+                "máximo valor futuro do estoque",
+            ),
+        ]
+
+    valores, status_texto = _resolver_lexicografico_v34(
+        classes,
+        registros,
+        demandas,
+        sequencia,
+        limite_ms,
+    )
+
+    if valores is None:
+        raise RuntimeError(
+            f"Ø{diametro:g}: não foi encontrada solução viável."
+        )
+
+    linhas = []
+    total_desperdicio = 0.0
+    total_retalho = 0.0
+    total_sobra = 0.0
+    novas_usadas = 0
+    retalhos_usados = 0
+    complementares = 0
+    total_fontes = 0
+    valor_futuro_total = 0.0
+    demanda_via_retalhos_mm = 0.0
+    id_padrao = 1
+
+    for j, vezes in enumerate(valores):
+        vezes = int(vezes)
+        if vezes <= 0:
+            continue
+
+        reg = registros[j]
+        classe = classes[reg["classe"]]
+        sobra = float(reg["sobra"])
+
+        total_fontes += vezes
+        total_sobra += sobra * vezes
+        valor_futuro_total += (
+            float(reg["delta_valor"]) * vezes
+        )
+        demanda_via_retalhos_mm += (
+            float(reg["uso_retalho_mm"]) * vezes
+        )
+
+        if classe["tipo"] == "RETALHO":
+            retalhos_usados += vezes
+        else:
+            novas_usadas += vezes
+
+        if classe.get("virtual"):
+            complementares += vezes
+
+        if sobra >= limite_retalho:
+            classificacao = "RETALHO REAPROVEITAVEL"
+            total_retalho += sobra * vezes
+        else:
+            classificacao = "DESPERDICIO"
+            total_desperdicio += sobra * vezes
+
+        partes = [
+            f"{qtd}x({comp:g}mm)"
+            for qtd, comp in zip(
+                reg["padrao"],
+                comprimentos,
+            )
+            if qtd > 0
+        ]
+
+        prefixo = (
+            "MR"
+            if estrategia != "MELHOR_USO_RETALHOS"
+            else "UR"
+        )
+
+        linhas.append(
+            {
+                "CENARIO": cenario,
+                "MODO": "EMERGENCIAL",
+                "DIAMETRO": diametro,
+                "ID_PADRAO": (
+                    f"{prefixo}{diametro:g}-{id_padrao}"
+                ),
+                "TIPO_FONTE": classe["tipo"],
+                "COMPRIMENTO_FONTE_MM": classe["comprimento"],
+                "QTD_BARRAS": vezes,
+                "ESQUEMA_DE_CORTE": " + ".join(partes),
+                "SOBRA_POR_BARRA_MM": sobra,
+                "CLASSIFICACAO_SOBRA": classificacao,
+                "ORIGEM_PLANO": classe["origem"],
+                "VALOR_FUTURO_CRITERIO_MM": reg["valor_sobra"],
+                "VALOR_ORIGEM_ESTOQUE_MM": reg["valor_origem"],
+                "DELTA_VALOR_ESTOQUE_MM": reg["delta_valor"],
+                "DEMANDA_ATENDIDA_POR_RETALHO_MM": (
+                    reg["uso_retalho_mm"]
+                ),
+            }
+        )
+        id_padrao += 1
+
+    demanda_total_mm = sum(
+        c * d
+        for c, d in zip(
+            comprimentos,
+            demandas,
+        )
+    )
+
+    material_usado = sum(
+        classes[registros[j]["classe"]]["comprimento"]
+        * int(valores[j])
+        for j in range(len(registros))
+        if int(valores[j]) > 0
+    )
+
+    aproveitamento = (
+        100.0 * demanda_total_mm / material_usado
+        if material_usado
+        else 0.0
+    )
+
+    pct_demanda_retalhos = (
+        100.0 * demanda_via_retalhos_mm / demanda_total_mm
+        if demanda_total_mm
+        else 0.0
+    )
+
+    resumo = {
+        "CENARIO": cenario,
+        "DIAMETRO": diametro,
+        "DEMANDA_TOTAL_PECAS": int(sum(demandas)),
+        "DEMANDA_TOTAL_MM": round(demanda_total_mm, 2),
+        "DEMANDA_ATENDIDA_MM": round(demanda_total_mm, 2),
+        "PECAS_ATENDIDAS": int(sum(demandas)),
+        "PECAS_FALTANTES": 0,
+        "ATENDIMENTO_PERCENTUAL": 100.0,
+        "BARRAS_NOVAS_USADAS": int(novas_usadas),
+        "RETALHOS_USADOS": int(retalhos_usados),
+        "TOTAL_FONTES_USADAS": int(total_fontes),
+        "BARRAS_COMPLEMENTARES": int(complementares),
+        "SOBRA_FISICA_TOTAL_MM": round(total_sobra, 2),
+        "DESPERDICIO_REAL_MM": round(total_desperdicio, 2),
+        "RETALHO_REAPROVEITAVEL_MM": round(total_retalho, 2),
+        "VALOR_FUTURO_TOTAL": round(valor_futuro_total, 3),
+        "DEMANDA_VIA_RETALHOS_MM": round(
+            demanda_via_retalhos_mm,
+            2,
+        ),
+        "DEMANDA_VIA_RETALHOS_PERCENTUAL": round(
+            pct_demanda_retalhos,
+            2,
+        ),
+        "APROVEITAMENTO_PERCENTUAL": round(
+            aproveitamento,
+            2,
+        ),
+        "ATENDIMENTO_FINAL_PERCENTUAL": 100.0,
+        "STATUS": status_texto,
+        "PADROES_GERADOS": len(registros),
+    }
+
+    comparacao = {
+        "DIAMETRO": diametro,
+        "CENARIO": cenario,
+        "BARRAS_NOVAS": int(novas_usadas),
+        "RETALHOS_USADOS": int(retalhos_usados),
+        "BARRAS_COMPLEMENTARES": int(complementares),
+        "FONTES_TOTAIS": int(total_fontes),
+        "DESPERDICIO_REAL_MM": round(total_desperdicio, 2),
+        "RETALHO_REAPROVEITAVEL_MM": round(total_retalho, 2),
+        "DEMANDA_VIA_RETALHOS_MM": round(
+            demanda_via_retalhos_mm,
+            2,
+        ),
+        "DEMANDA_VIA_RETALHOS_PERCENTUAL": round(
+            pct_demanda_retalhos,
+            2,
+        ),
+        "VALOR_FUTURO_TOTAL": round(
+            valor_futuro_total,
+            3,
+        ),
+    }
+
+    recomendacoes = []
+    if complementares > 0:
+        recomendacoes.append(
+            {
+                "CENARIO": cenario,
+                "DIAMETRO": diametro,
+                "BARRAS_PADRAO_RECOMENDADAS": int(complementares),
+                "COMPRIMENTO_BARRA_MM": float(barra_padrao),
+                "ATENDIMENTO_FINAL_PERCENTUAL": 100.0,
+            }
+        )
+
+    return (
+        linhas,
+        resumo,
+        [],
+        recomendacoes,
+        [comparacao],
+    )
+
+
+def _plano_resumido_v33(plano):
+    if plano is None or not isinstance(plano, pd.DataFrame) or plano.empty:
+        return pd.DataFrame(
+            [{"STATUS": "NENHUM CORTE GERADO"}]
+        )
+
+    df = plano.copy()
+
+    if (
+        "PIV_OFERTA_LINHAS_ATENDIDAS" not in df.columns
+        and "PIV_LINHAS_ATENDIDAS" in df.columns
+    ):
+        df["PIV_OFERTA_LINHAS_ATENDIDAS"] = (
+            df["PIV_LINHAS_ATENDIDAS"]
+        )
+
+    desejadas = [
+        "CENARIO",
+        "ID_BARRA",
+        "DIAMETRO",
+        "TIPO_FONTE",
+        "COMPRIMENTO_FONTE_MM",
+        "ESQUEMA_DE_CORTE",
+        "PIV_OFERTA_LINHAS_ATENDIDAS",
+        "SOBRA_POR_BARRA_MM",
+        "CLASSIFICACAO_SOBRA",
+        "DEMANDA_ATENDIDA_POR_RETALHO_MM",
+        "VALOR_FUTURO_CRITERIO_MM",
+        "ORIGEM_PLANO",
+    ]
+
+    cols = [
+        c
+        for c in desejadas
+        if c in df.columns
+    ]
+
+    return df[cols].copy()
+
+
+def exportar_excel_emergencial(
+    caminho_demanda,
+    plano,
+    resumo=None,
+    faltas=None,
+    recomendacoes=None,
+    demanda=None,
+    estoque=None,
+    estoque_final=None,
+    movimentos=None,
+    arquivo_lab=None,
+    arquivo_estoque=None,
+    horizonte=None,
+    parametros=None,
+    **kwargs,
+):
+    pasta = os.path.dirname(caminho_demanda)
+    timestamp = datetime.now().strftime(
+        "%Y%m%d_%H%M%S"
+    )
+    caminho = os.path.join(
+        pasta,
+        f"Plano_Corte_Sob_Demanda_V34_{timestamp}.xlsx",
+    )
+
+    plano_saida = _plano_resumido_v33(plano)
+
+    metodo = _metodo_df_v33(
+        "EMERGENCIAL / SOB DEMANDA",
+        arquivo_demanda=caminho_demanda,
+        arquivo_lab=arquivo_lab,
+        arquivo_estoque=arquivo_estoque,
+        horizonte=horizonte,
+        parametros=parametros,
+        observacao=(
+            "O arquivo contém dois cenários na mesma aba PLANO_DE_CORTE: "
+            "'1 - MELHOR RESPOSTA' prioriza desperdício/uso de novas; "
+            "'2 - MELHOR USO DOS RETALHOS' maximiza primeiro os milímetros "
+            "da demanda atendidos por retalhos existentes. Ambos atendem a "
+            "demanda exatamente quando fisicamente viável."
+        ),
+    )
+
+    with pd.ExcelWriter(
+        caminho,
+        engine="openpyxl",
+    ) as writer:
+        plano_saida.to_excel(
+            writer,
+            sheet_name="PLANO_DE_CORTE",
+            index=False,
+        )
+        metodo.to_excel(
+            writer,
+            sheet_name="METODO",
+            index=False,
+        )
+        _formatar_excel_v33(writer)
+
+    return caminho
+
+
+def _garantir_colunas_feedback_v34():
+    inicializar_feedback_operador()
+    with sqlite3.connect(caminho_banco_principia()) as con:
+        cols_feedback = {
+            row[1]
+            for row in con.execute(
+                "PRAGMA table_info(feedback_operador)"
+            ).fetchall()
+        }
+        if "cenario_escolhido" not in cols_feedback:
+            con.execute(
+                "ALTER TABLE feedback_operador ADD COLUMN cenario_escolhido TEXT"
+            )
+
+        cols_modelos = {
+            row[1]
+            for row in con.execute(
+                "PRAGMA table_info(modelos_usados)"
+            ).fetchall()
+        }
+        if "cenario" not in cols_modelos:
+            con.execute(
+                "ALTER TABLE modelos_usados ADD COLUMN cenario TEXT"
+            )
+        con.commit()
+
+
+def registrar_feedback_operador(
+    id_execucao,
+    usado_modelo,
+    plano=None,
+):
+    """
+    V3.4: além do SIM/NÃO, registra qual dos cenários foi escolhido.
+    """
+    if not id_execucao:
+        raise ValueError(
+            "Não foi possível identificar a execução atual."
+        )
+
+    _garantir_colunas_feedback_v34()
+
+    agora = datetime.now().isoformat(
+        timespec="seconds"
+    )
+    usado_int = 1 if bool(usado_modelo) else 0
+
+    cenario = ""
+    if isinstance(plano, pd.DataFrame) and not plano.empty:
+        if "CENARIO" in plano.columns:
+            unicos = [
+                str(x)
+                for x in plano["CENARIO"].dropna().unique()
+            ]
+            if len(unicos) == 1:
+                cenario = unicos[0]
+
+    with sqlite3.connect(caminho_banco_principia()) as con:
+        con.execute(
+            """
+            INSERT INTO feedback_operador (
+                id_execucao,
+                usado_modelo,
+                data_hora,
+                cenario_escolhido
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(id_execucao) DO UPDATE SET
+                usado_modelo=excluded.usado_modelo,
+                data_hora=excluded.data_hora,
+                cenario_escolhido=excluded.cenario_escolhido
+            """,
+            (
+                id_execucao,
+                usado_int,
+                agora,
+                cenario,
+            ),
+        )
+
+        con.execute(
+            "DELETE FROM modelos_usados WHERE id_execucao = ?",
+            (id_execucao,),
+        )
+
+        if (
+            usado_int
+            and isinstance(plano, pd.DataFrame)
+            and not plano.empty
+        ):
+            for _, row in plano.iterrows():
+                con.execute(
+                    """
+                    INSERT INTO modelos_usados (
+                        id_execucao,
+                        data_confirmacao,
+                        modo,
+                        id_barra,
+                        id_padrao,
+                        diametro,
+                        tipo_fonte,
+                        comprimento_fonte_mm,
+                        esquema_corte,
+                        sobra_mm,
+                        classificacao_sobra,
+                        valor_v15,
+                        valor_v30,
+                        valor_v60,
+                        valor_futuro,
+                        piv_linhas_atendidas,
+                        cenario
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        id_execucao,
+                        agora,
+                        str(row.get("MODO", "")),
+                        str(row.get("ID_BARRA", "")),
+                        str(row.get("ID_PADRAO", "")),
+                        _float_or_none(
+                            row.get("DIAMETRO")
+                        ),
+                        str(row.get("TIPO_FONTE", "")),
+                        _float_or_none(
+                            row.get("COMPRIMENTO_FONTE_MM")
+                        ),
+                        str(row.get("ESQUEMA_DE_CORTE", "")),
+                        _float_or_none(
+                            row.get("SOBRA_POR_BARRA_MM")
+                        ),
+                        str(
+                            row.get(
+                                "CLASSIFICACAO_SOBRA",
+                                "",
+                            )
+                        ),
+                        _float_or_none(
+                            row.get("VALOR_V15_MM")
+                        ),
+                        _float_or_none(
+                            row.get("VALOR_V30_MM")
+                        ),
+                        _float_or_none(
+                            row.get("VALOR_V60_MM")
+                        ),
+                        _float_or_none(
+                            row.get(
+                                "VALOR_FUTURO_CRITERIO_MM"
+                            )
+                        ),
+                        str(
+                            row.get(
+                                "PIV_OFERTA_LINHAS_ATENDIDAS",
+                                row.get(
+                                    "PIV_LINHAS_ATENDIDAS",
+                                    "",
+                                ),
+                            )
+                        ),
+                        str(row.get("CENARIO", cenario)),
+                    ),
+                )
+
+        con.commit()
+
+    return "USADO" if usado_int else "NÃO USADO"
+
+
+def ler_historico_execucoes_feedback(limite=300):
+    _garantir_colunas_feedback_v34()
+
+    with sqlite3.connect(caminho_banco_principia()) as con:
+        return pd.read_sql_query(
+            """
+            SELECT
+                e.id_execucao,
+                e.data_hora,
+                e.modo,
+                e.horizonte_lab,
+                CASE
+                    WHEN f.usado_modelo = 1 THEN 'USADO'
+                    WHEN f.usado_modelo = 0 THEN 'NÃO USADO'
+                    ELSE 'AGUARDANDO'
+                END AS confirmacao_operador,
+                COALESCE(f.cenario_escolhido, '') AS cenario_escolhido,
+                e.arquivo_demanda,
+                e.excel_saida
+            FROM execucoes e
+            LEFT JOIN feedback_operador f
+                ON f.id_execucao = e.id_execucao
+            ORDER BY e.data_hora DESC
+            LIMIT ?
+            """,
+            con,
+            params=(int(limite),),
+        )
+
+
+class PrincipiaMinimaV34App(PrincipiaMinimaV33App):
+    """V3.4: modo Sob Demanda com duas respostas comparáveis."""
+
+    def __init__(self):
+        self._planos_cenarios = {}
+        self._resumos_cenarios = {}
+        super().__init__()
+        self.title(
+            "Principia Minima • Factory Intelligence V3.4"
+        )
+
+    def mostrar_historico(self):
+        df = ler_historico_execucoes_feedback(400)
+
+        win = tk.Toplevel(self)
+        win.title(
+            "Principia Minima • Histórico e validação"
+        )
+        win.geometry("1320x720")
+        win.minsize(1040, 580)
+        win.configure(
+            bg=self.COLORS["background"]
+        )
+
+        self._header(
+            win,
+            "HISTÓRICO DE OTIMIZAÇÕES",
+            "Propostas do algoritmo e confirmação de uso real pelo operador",
+        )
+
+        toolbar = ttk.Frame(
+            win,
+            padding=(18, 10),
+        )
+        toolbar.pack(
+            fill="x",
+        )
+
+        ttk.Button(
+            toolbar,
+            text="ATUALIZAR",
+            style="Secondary.TButton",
+            command=lambda: (
+                win.destroy(),
+                self.mostrar_historico(),
+            ),
+        ).pack(
+            side="left",
+        )
+
+        def apagar():
+            usuario = simpledialog.askstring(
+                "Autenticação",
+                "Usuário administrativo:",
+                parent=win,
+            )
+            if usuario is None:
+                return
+
+            senha = simpledialog.askstring(
+                "Autenticação",
+                "Senha:",
+                show="*",
+                parent=win,
+            )
+            if senha is None:
+                return
+
+            try:
+                if (
+                    str(usuario) != ADMIN_HISTORICO_USUARIO
+                    or str(senha) != ADMIN_HISTORICO_SENHA
+                ):
+                    raise PermissionError(
+                        "Usuário ou senha inválidos."
+                    )
+
+                confirmar = messagebox.askyesno(
+                    "Apagar histórico",
+                    (
+                        "Esta operação apagará o histórico local de execuções, "
+                        "feedbacks, modelos usados, snapshots e retalhos registrados.\n\n"
+                        "Os arquivos Excel e HTML já exportados não serão apagados.\n\n"
+                        "Deseja continuar?"
+                    ),
+                    parent=win,
+                )
+
+                if not confirmar:
+                    return
+
+                apagar_historico_local_protegido(
+                    usuario,
+                    senha,
+                )
+
+                messagebox.showinfo(
+                    "Histórico apagado",
+                    "O histórico local foi apagado com sucesso.",
+                    parent=win,
+                )
+                win.destroy()
+                self.mostrar_historico()
+
+            except Exception as exc:
+                messagebox.showerror(
+                    "Acesso negado",
+                    str(exc),
+                    parent=win,
+                )
+
+        ttk.Button(
+            toolbar,
+            text="APAGAR HISTÓRICO",
+            style="Danger.TButton",
+            command=apagar,
+        ).pack(
+            side="right",
+        )
+
+        content = ttk.Frame(
+            win,
+            padding=(18, 4, 18, 14),
+        )
+        content.pack(
+            fill="both",
+            expand=True,
+        )
+
+        card = ttk.Frame(
+            content,
+            style="Card.TFrame",
+            padding=(14, 12),
+        )
+        card.pack(
+            fill="both",
+            expand=True,
+        )
+
+        cols = (
+            "data_hora",
+            "modo",
+            "confirmacao_operador",
+            "cenario_escolhido",
+            "horizonte_lab",
+            "arquivo_demanda",
+            "excel_saida",
+        )
+
+        labels = {
+            "data_hora": "DATA / HORA",
+            "modo": "MODO",
+            "confirmacao_operador": "USO REAL",
+            "cenario_escolhido": "CENÁRIO ESCOLHIDO",
+            "horizonte_lab": "HORIZONTE",
+            "arquivo_demanda": "ARQUIVO DE DEMANDA",
+            "excel_saida": "ARQUIVO DE SAÍDA",
+        }
+
+        tree = ttk.Treeview(
+            card,
+            columns=cols,
+            show="headings",
+        )
+
+        for c in cols:
+            tree.heading(
+                c,
+                text=labels[c],
+            )
+            width = 145
+            if c in {
+                "arquivo_demanda",
+                "excel_saida",
+            }:
+                width = 340
+            elif c == "confirmacao_operador":
+                width = 130
+
+            tree.column(
+                c,
+                width=width,
+                anchor=(
+                    "center"
+                    if c not in {
+                        "arquivo_demanda",
+                        "excel_saida",
+                    }
+                    else "w"
+                ),
+            )
+
+        for _, row in df.iterrows():
+            tree.insert(
+                "",
+                "end",
+                values=[
+                    row.get(c, "")
+                    for c in cols
+                ],
+            )
+
+        vbar = ttk.Scrollbar(
+            card,
+            orient="vertical",
+            command=tree.yview,
+        )
+        hbar = ttk.Scrollbar(
+            card,
+            orient="horizontal",
+            command=tree.xview,
+        )
+
+        tree.configure(
+            yscrollcommand=vbar.set,
+            xscrollcommand=hbar.set,
+        )
+
+        tree.grid(
+            row=0,
+            column=0,
+            sticky="nsew",
+        )
+        vbar.grid(
+            row=0,
+            column=1,
+            sticky="ns",
+        )
+        hbar.grid(
+            row=1,
+            column=0,
+            sticky="ew",
+        )
+
+        card.rowconfigure(
+            0,
+            weight=1,
+        )
+        card.columnconfigure(
+            0,
+            weight=1,
+        )
+
+    def _comparar_cenarios_agregados(self, comparacao):
+        if (
+            comparacao is None
+            or not isinstance(comparacao, pd.DataFrame)
+            or comparacao.empty
+        ):
+            return pd.DataFrame()
+
+        cols_soma = [
+            "BARRAS_NOVAS",
+            "RETALHOS_USADOS",
+            "BARRAS_COMPLEMENTARES",
+            "FONTES_TOTAIS",
+            "DESPERDICIO_REAL_MM",
+            "RETALHO_REAPROVEITAVEL_MM",
+            "DEMANDA_VIA_RETALHOS_MM",
+            "VALOR_FUTURO_TOTAL",
+        ]
+
+        agg = {}
+
+        for c in cols_soma:
+            if c in comparacao.columns:
+                agg[c] = "sum"
+
+        df = (
+            comparacao
+            .groupby(
+                "CENARIO",
+                as_index=False,
+            )
+            .agg(agg)
+        )
+
+        if "DEMANDA_VIA_RETALHOS_PERCENTUAL" in comparacao.columns:
+            pct = (
+                comparacao
+                .groupby("CENARIO")[
+                    "DEMANDA_VIA_RETALHOS_PERCENTUAL"
+                ]
+                .mean()
+                .reset_index()
+            )
+            df = df.merge(
+                pct,
+                on="CENARIO",
+                how="left",
+            )
+
+        return df
+
+    def mostrar_comparacao_cenarios(
+        self,
+        resumo,
+        comparacao,
+        excel,
+        visual,
+    ):
+        win = tk.Toplevel(self)
+        win.title(
+            "Principia Minima • Comparação de Cenários"
+        )
+        win.geometry("1380x820")
+        win.minsize(1120, 680)
+        win.configure(
+            bg=self.COLORS["background"]
+        )
+
+        self._header(
+            win,
+            "DUAS RESPOSTAS • MODO SOB DEMANDA",
+            (
+                "Compare a solução global com a solução que prioriza "
+                "o aproveitamento dos retalhos existentes."
+            ),
+        )
+
+        notebook = ttk.Notebook(win)
+        notebook.pack(
+            fill="both",
+            expand=True,
+            padx=18,
+            pady=(14, 10),
+        )
+
+        tab_comp = ttk.Frame(
+            notebook,
+            padding=12,
+        )
+        notebook.add(
+            tab_comp,
+            text="Comparação",
+        )
+
+        resumo_agregado = self._comparar_cenarios_agregados(
+            comparacao
+        )
+
+        if not resumo_agregado.empty:
+            card = ttk.Frame(
+                tab_comp,
+                style="Card.TFrame",
+                padding=(16, 14),
+            )
+            card.pack(
+                fill="x",
+                pady=(0, 12),
+            )
+
+            ttk.Label(
+                card,
+                text="INDICADORES DOS DOIS CENÁRIOS",
+                style="CardTitle.TLabel",
+            ).pack(
+                anchor="w",
+                pady=(0, 10),
+            )
+
+            cols = list(
+                resumo_agregado.columns
+            )
+            tree = ttk.Treeview(
+                card,
+                columns=cols,
+                show="headings",
+                height=3,
+            )
+
+            for c in cols:
+                tree.heading(
+                    c,
+                    text=c.replace("_", " "),
+                )
+                tree.column(
+                    c,
+                    width=165,
+                    anchor="center",
+                )
+
+            for _, row in resumo_agregado.iterrows():
+                tree.insert(
+                    "",
+                    "end",
+                    values=[
+                        row.get(c, "")
+                        for c in cols
+                    ],
+                )
+
+            tree.pack(
+                fill="x",
+                expand=True,
+            )
+
+        info = tk.Frame(
+            tab_comp,
+            bg=self.COLORS["surface"],
+            highlightthickness=1,
+            highlightbackground=self.COLORS["border"],
+            padx=18,
+            pady=16,
+        )
+        info.pack(
+            fill="x",
+            pady=(0, 12),
+        )
+
+        tk.Label(
+            info,
+            text="COMO INTERPRETAR",
+            bg=self.COLORS["surface"],
+            fg=self.COLORS["light_blue"],
+            font=("Segoe UI", 9, "bold"),
+        ).pack(
+            anchor="w",
+        )
+
+        tk.Label(
+            info,
+            text=(
+                "1 - MELHOR RESPOSTA: prioriza menor desperdício e, depois, "
+                "menor uso de barras novas.\n"
+                "2 - MELHOR USO DOS RETALHOS: prioriza a maior parcela da demanda "
+                "atendida pelos retalhos existentes e depois refina desperdício, "
+                "quantidade de fontes e valor futuro."
+            ),
+            bg=self.COLORS["surface"],
+            fg=self.COLORS["text"],
+            font=("Segoe UI", 10),
+            justify="left",
+            wraplength=1180,
+        ).pack(
+            anchor="w",
+            pady=(6, 0),
+        )
+
+        for cenario in (
+            CENARIO_MELHOR,
+            CENARIO_RETALHOS,
+        ):
+            tab = ttk.Frame(
+                notebook,
+                padding=12,
+            )
+            notebook.add(
+                tab,
+                text=cenario,
+            )
+
+            plano_c = self._planos_cenarios.get(
+                cenario,
+                pd.DataFrame(),
+            )
+            resumo_c = self._resumos_cenarios.get(
+                cenario,
+                pd.DataFrame(),
+            )
+
+            if not resumo_c.empty:
+                self._build_summary_table(
+                    tab,
+                    resumo_c,
+                )
+
+            if not plano_c.empty:
+                plano_card = ttk.LabelFrame(
+                    tab,
+                    text="Plano de corte",
+                    padding=10,
+                    style="Card.TLabelframe",
+                )
+                plano_card.pack(
+                    fill="both",
+                    expand=True,
+                    pady=(12, 0),
+                )
+
+                cols = [
+                    c
+                    for c in (
+                        "ID_BARRA",
+                        "DIAMETRO",
+                        "TIPO_FONTE",
+                        "COMPRIMENTO_FONTE_MM",
+                        "ESQUEMA_DE_CORTE",
+                        "PIV_OFERTA_LINHAS_ATENDIDAS",
+                        "SOBRA_POR_BARRA_MM",
+                        "CLASSIFICACAO_SOBRA",
+                        "ORIGEM_PLANO",
+                    )
+                    if c in plano_c.columns
+                ]
+
+                tree = ttk.Treeview(
+                    plano_card,
+                    columns=cols,
+                    show="headings",
+                    height=10,
+                )
+
+                for c in cols:
+                    tree.heading(
+                        c,
+                        text=c.replace("_", " "),
+                    )
+                    tree.column(
+                        c,
+                        width=165,
+                        anchor="center",
+                    )
+
+                for _, row in plano_c.iterrows():
+                    tree.insert(
+                        "",
+                        "end",
+                        values=[
+                            row.get(c, "")
+                            for c in cols
+                        ],
+                    )
+
+                vbar = ttk.Scrollbar(
+                    plano_card,
+                    orient="vertical",
+                    command=tree.yview,
+                )
+                hbar = ttk.Scrollbar(
+                    plano_card,
+                    orient="horizontal",
+                    command=tree.xview,
+                )
+
+                tree.configure(
+                    yscrollcommand=vbar.set,
+                    xscrollcommand=hbar.set,
+                )
+
+                tree.grid(
+                    row=0,
+                    column=0,
+                    sticky="nsew",
+                )
+                vbar.grid(
+                    row=0,
+                    column=1,
+                    sticky="ns",
+                )
+                hbar.grid(
+                    row=1,
+                    column=0,
+                    sticky="ew",
+                )
+
+                plano_card.rowconfigure(
+                    0,
+                    weight=1,
+                )
+                plano_card.columnconfigure(
+                    0,
+                    weight=1,
+                )
+
+        actions = ttk.Frame(
+            win,
+            padding=(18, 0, 18, 14),
+        )
+        actions.pack(
+            fill="x",
+        )
+
+        ttk.Label(
+            actions,
+            text=(
+                "Escolha o cenário que deseja abrir como plano principal. "
+                "A confirmação SIM/NÃO do operador será registrada somente "
+                "para o cenário escolhido."
+            ),
+            style="MutedWhite.TLabel",
+        ).pack(
+            side="left",
+        )
+
+        def abrir_cenario(cenario):
+            plano_c = self._planos_cenarios.get(
+                cenario,
+                pd.DataFrame(),
+            ).copy()
+            resumo_c = self._resumos_cenarios.get(
+                cenario,
+                pd.DataFrame(),
+            ).copy()
+
+            self._ultimo_plano = plano_c
+            self._ultimo_html = visual
+            self._ultima_comparacao = comparacao
+
+            # Evita mostrar estoque final de um cenário diferente.
+            self._ultimo_estoque_final = pd.DataFrame()
+
+            win.destroy()
+
+            super(PrincipiaMinimaV34App, self).mostrar_resultado(
+                "EMERGENCIAL",
+                resumo_c,
+                excel,
+                pd.DataFrame(),
+            )
+
+        ttk.Button(
+            actions,
+            text="ABRIR MELHOR RESPOSTA",
+            style="Accent.TButton",
+            command=lambda: abrir_cenario(
+                CENARIO_MELHOR
+            ),
+        ).pack(
+            side="right",
+            padx=(8, 0),
+        )
+
+        ttk.Button(
+            actions,
+            text="ABRIR MELHOR USO DOS RETALHOS",
+            style="Success.TButton",
+            command=lambda: abrir_cenario(
+                CENARIO_RETALHOS
+            ),
+        ).pack(
+            side="right",
+            padx=8,
+        )
+
+        ttk.Button(
+            actions,
+            text="Abrir Excel",
+            style="Secondary.TButton",
+            command=lambda: self.abrir_arquivo(excel),
+        ).pack(
+            side="right",
+            padx=8,
+        )
+
+    def processar_emergencial(self):
+        if not self.caminho_demanda_emergencial:
+            messagebox.showwarning(
+                "Demanda",
+                "Selecione a planilha de demanda.",
+            )
+            return
+
+        try:
+            params = {
+                "kerf": float(
+                    self.entry_kerf_e.get().replace(",", ".")
+                ),
+                "limite": float(
+                    self.entry_retalho_e.get().replace(",", ".")
+                ),
+                "barra_padrao": float(
+                    self.entry_barra_e.get().replace(",", ".")
+                ),
+                "desperdicio_max": float(
+                    self.entry_desperdicio_max_e.get().replace(",", ".")
+                ),
+                "horizonte_nome": self.combo_horizonte_e.get(),
+            }
+
+            if (
+                params["kerf"] < 0
+                or params["limite"] < 0
+                or params["barra_padrao"] <= 0
+                or params["desperdicio_max"] < 0
+            ):
+                raise ValueError(
+                    "Parâmetros físicos inválidos."
+                )
+
+            demanda_path = self.caminho_demanda_emergencial
+            estoque_path = self.caminho_estoque_emergencial
+            estoque = self.obter_estoque_emergencial(
+                params["barra_padrao"]
+            )
+            lab_path = self.caminho_lab_emergencial
+
+        except Exception as exc:
+            messagebox.showerror(
+                "Parâmetros / Estoque",
+                str(exc),
+            )
+            return
+
+        def worker(emit):
+            emit(
+                "stage",
+                2,
+                9,
+                "Lendo demanda rastreável...",
+                4,
+            )
+
+            df_detalhada = ler_demanda_csv(
+                demanda_path
+            )
+            df_solver = agrupar_demanda_para_solver(
+                df_detalhada
+            )
+
+            horizonte = HORIZONTES_LAB.get(
+                params["horizonte_nome"],
+                "MEDIA",
+            )
+
+            emit(
+                "stage",
+                9,
+                15,
+                "Carregando Principia Lab...",
+                3,
+            )
+
+            modelo = (
+                ModeloValorRetalho(
+                    lab_path,
+                    horizonte,
+                )
+                if (
+                    lab_path
+                    and os.path.exists(lab_path)
+                )
+                else None
+            )
+
+            diametros = sorted(
+                df_solver["DIAMETRO"].unique()
+            )
+
+            total_d = max(
+                len(diametros),
+                1,
+            )
+
+            planos_melhor = []
+            planos_retalhos = []
+            resumos_melhor = []
+            resumos_retalhos = []
+            comps = []
+            recs_total = []
+
+            # Mantém aproximadamente o mesmo orçamento total por diâmetro:
+            # metade para cada cenário.
+            limite_cenario = max(
+                30000,
+                int(
+                    TEMPO_LIMITE_OTIMIZACAO_MS
+                    // 2
+                ),
+            )
+
+            for i, diam in enumerate(
+                diametros,
+                start=1,
+            ):
+                inicio_pct = (
+                    15
+                    + (i - 1) * 70 / total_d
+                )
+                meio_pct = (
+                    15
+                    + (i - 0.5) * 70 / total_d
+                )
+                fim_pct = (
+                    15
+                    + i * 70 / total_d
+                )
+
+                demanda_d = df_solver[
+                    df_solver["DIAMETRO"] == diam
+                ].copy()
+
+                estoque_d = estoque[
+                    estoque["DIAMETRO"] == diam
+                ].copy()
+
+                emit(
+                    "stage",
+                    inicio_pct,
+                    meio_pct,
+                    (
+                        f"Ø{diam:g}: calculando "
+                        "1 - Melhor Resposta..."
+                    ),
+                    limite_cenario / 1000.0,
+                )
+
+                (
+                    linhas_1,
+                    resumo_1,
+                    faltas_1,
+                    recs_1,
+                    comp_1,
+                ) = otimizar_estoque_cenario_v34(
+                    diam,
+                    demanda_d,
+                    estoque_d,
+                    params["kerf"],
+                    params["limite"],
+                    params["desperdicio_max"],
+                    params["barra_padrao"],
+                    modelo_valor=modelo,
+                    estrategia="MELHOR_RESPOSTA",
+                    limite_ms=limite_cenario,
+                )
+
+                planos_melhor.extend(
+                    linhas_1
+                )
+                resumos_melhor.append(
+                    resumo_1
+                )
+                comps.extend(
+                    comp_1
+                )
+                recs_total.extend(
+                    recs_1
+                )
+
+                emit(
+                    "stage",
+                    meio_pct,
+                    fim_pct,
+                    (
+                        f"Ø{diam:g}: calculando "
+                        "2 - Melhor Uso dos Retalhos..."
+                    ),
+                    limite_cenario / 1000.0,
+                )
+
+                (
+                    linhas_2,
+                    resumo_2,
+                    faltas_2,
+                    recs_2,
+                    comp_2,
+                ) = otimizar_estoque_cenario_v34(
+                    diam,
+                    demanda_d,
+                    estoque_d,
+                    params["kerf"],
+                    params["limite"],
+                    params["desperdicio_max"],
+                    params["barra_padrao"],
+                    modelo_valor=modelo,
+                    estrategia="MELHOR_USO_RETALHOS",
+                    limite_ms=limite_cenario,
+                )
+
+                planos_retalhos.extend(
+                    linhas_2
+                )
+                resumos_retalhos.append(
+                    resumo_2
+                )
+                comps.extend(
+                    comp_2
+                )
+                recs_total.extend(
+                    recs_2
+                )
+
+            plano_1 = pd.DataFrame(
+                planos_melhor
+            )
+            plano_2 = pd.DataFrame(
+                planos_retalhos
+            )
+
+            resumo_1 = pd.DataFrame(
+                resumos_melhor
+            )
+            resumo_2 = pd.DataFrame(
+                resumos_retalhos
+            )
+
+            emit(
+                "stage",
+                86,
+                91,
+                "Atribuindo cortes aos PIVs, Ofertas e Linhas...",
+                4,
+            )
+
+            plano_1 = adicionar_rastreabilidade_ao_plano(
+                plano_1,
+                df_detalhada,
+            )
+            plano_2 = adicionar_rastreabilidade_ao_plano(
+                plano_2,
+                df_detalhada,
+            )
+
+            plano_1 = anotar_valor_retalhos(
+                plano_1,
+                modelo,
+                params["limite"],
+                horizonte,
+            )
+            plano_2 = anotar_valor_retalhos(
+                plano_2,
+                modelo,
+                params["limite"],
+                horizonte,
+            )
+
+            # Reforça o rótulo após a expansão física das barras.
+            plano_1["CENARIO"] = CENARIO_MELHOR
+            plano_2["CENARIO"] = CENARIO_RETALHOS
+
+            if "ID_BARRA" in plano_1.columns:
+                plano_1["ID_BARRA"] = "MR-" + plano_1["ID_BARRA"].astype(str)
+            if "ID_BARRA" in plano_2.columns:
+                plano_2["ID_BARRA"] = "UR-" + plano_2["ID_BARRA"].astype(str)
+
+            plano = pd.concat(
+                [
+                    plano_1,
+                    plano_2,
+                ],
+                ignore_index=True,
+            )
+
+            resumo = pd.concat(
+                [
+                    resumo_1,
+                    resumo_2,
+                ],
+                ignore_index=True,
+            )
+
+            comparacao = pd.DataFrame(
+                comps
+            )
+            recomendacoes = pd.DataFrame(
+                recs_total
+            )
+
+            emit(
+                "stage",
+                91,
+                96,
+                "Gerando Excel com os dois cenários...",
+                3,
+            )
+
+            excel = exportar_excel_emergencial(
+                demanda_path,
+                plano,
+                resumo,
+                pd.DataFrame(),
+                recomendacoes,
+                df_detalhada.drop(
+                    columns=["_ORDEM"],
+                    errors="ignore",
+                ),
+                estoque,
+                arquivo_lab=lab_path,
+                arquivo_estoque=estoque_path,
+                horizonte=horizonte,
+                parametros={
+                    "barra_padrao": params["barra_padrao"],
+                    "kerf": params["kerf"],
+                    "limite_retalho": params["limite"],
+                    "desperdicio_max": params["desperdicio_max"],
+                },
+            )
+
+            emit(
+                "stage",
+                96,
+                99,
+                "Gerando folhas coloridas para impressão...",
+                2,
+            )
+
+            visual = gerar_folha_visual_html(
+                plano,
+                excel,
+                logo_path=self.logo_path,
+                titulo=(
+                    "Principia Minima - "
+                    "Comparação Sob Demanda"
+                ),
+            )
+
+            return {
+                "plano": plano,
+                "plano_1": plano_1,
+                "plano_2": plano_2,
+                "resumo": resumo,
+                "resumo_1": resumo_1,
+                "resumo_2": resumo_2,
+                "comparacao": comparacao,
+                "excel": excel,
+                "visual": visual,
+                "faltas": pd.DataFrame(),
+                "estoque": estoque,
+                "limite": params["limite"],
+                "horizonte": horizonte,
+                "parametros": {
+                    "barra_padrao": params["barra_padrao"],
+                    "kerf": params["kerf"],
+                    "limite_retalho": params["limite"],
+                    "desperdicio_max": params["desperdicio_max"],
+                },
+            }
+
+        def success(data):
+            self._planos_cenarios = {
+                CENARIO_MELHOR: data["plano_1"],
+                CENARIO_RETALHOS: data["plano_2"],
+            }
+
+            self._resumos_cenarios = {
+                CENARIO_MELHOR: data["resumo_1"],
+                CENARIO_RETALHOS: data["resumo_2"],
+            }
+
+            self._ultimo_plano = data["plano_1"]
+            self._ultima_comparacao = data["comparacao"]
+            self._ultimo_html = data["visual"]
+            self._ultimo_estoque_final = pd.DataFrame()
+            self._ultimo_limite_retalho = data["limite"]
+
+            # O histórico da execução registra como proposta principal
+            # a "Melhor Resposta". Se o operador escolher o outro cenário,
+            # MODELOS_USADOS receberá apenas o cenário efetivamente confirmado.
+            self._ultima_execucao_id = registrar_execucao_historico(
+                modo="EMERGENCIAL_DUAL",
+                arquivo_demanda=demanda_path,
+                arquivo_estoque=estoque_path,
+                resumo=data["resumo"],
+                plano=data["plano_1"],
+                excel_saida=data["excel"],
+                folha_visual=data["visual"],
+                arquivo_lab=lab_path,
+                horizonte_lab=data["horizonte"],
+                parametros=data["parametros"],
+                estoque_inicial=data["estoque"],
+                estoque_final=None,
+            )
+
+            self.mostrar_comparacao_cenarios(
+                data["resumo"],
+                data["comparacao"],
+                data["excel"],
+                data["visual"],
+            )
+
+        self._run_with_progress(
+            "Principia Minima • Sob Demanda • Dupla Estratégia",
+            worker,
+            success,
+        )
+
+
+# =====================================================================
+# EXECUÇÃO V3.4
+# =====================================================================
+if __name__ == "__main__":
+    app = PrincipiaMinimaV34App()
     app.mainloop()
